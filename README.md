@@ -14,8 +14,7 @@ Ondersteunde bestanden in deze repo:
 
 ## Deployen
 
-1. Kopieer je dashboardbestanden naar `/dashboards/wessels/`.
-2. Commit en push je wijzigingen.
-3. Publiceer de `dashboards/wessels` map via je gewenste hosting (bijvoorbeeld GitHub Pages voor HTML/JS, of een Python-hostingplatform voor `.py`).
+1. Commit en push je wijzigingen nadat je bestanden in `/dashboards/wessels/` staan.
+2. Publiceer de `dashboards/wessels` map via je gewenste hosting (bijvoorbeeld GitHub Pages voor HTML/JS nadat je Pages in repository-instellingen hebt aangezet, of een Python-hostingplatform voor `.py`).
 
-> Let op: GitHub Pages draait geen Python-code. Gebruik voor Python een runtime-platform (zoals Render, Railway of PythonAnywhere) of zet je Python om naar een statische output.
+> Let op: GitHub Pages draait geen Python-code. Gebruik voor Python een runtime-platform (zoals Render, Railway of PythonAnywhere) of zet je Python om naar statische output (bijvoorbeeld vooraf gegenereerde HTML-bestanden).
