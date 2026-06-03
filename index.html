@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wessels Analyse Tool</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    *,:before,:after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: #1e293b;
+    }
+    header {
+      background: #00843D;
+      color: #fff;
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    .logo { font-size: 15px; font-weight: 700; }
+    .logo span { color: #6ee7b7; }
+    main {
+      flex: 1;
+      padding: 10px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .upload-box {
+      background: #fff;
+      border: 1px solid #d7dee8;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+      overflow: hidden;
+    }
+    .ub-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .ub-header:hover { background: #f0fdf4; }
+    .ub-header h3 { font-size: 12px; font-weight: 700; color: #1e293b; flex: 1; }
+    .ub-toggle { font-size: 10px; color: #94a3b8; transition: transform .25s; }
+    .upload-box.open .ub-toggle { transform: rotate(180deg); }
+    .ub-body { display: none; }
+    .upload-box.open .ub-body { display: flex; flex-wrap: wrap; gap: 0; }
+    .ub-group {
+      padding: 8px 14px;
+      border-right: 1px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .ub-group:last-child { border-right: none; }
+    .ub-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .ub-group-icon { font-size: 12px; }
+    .ub-group-status { font-size: 9px; color: #94a3b8; font-weight: 400; margin-left: 2px; }
+    .ub-files { display: flex; flex-wrap: wrap; gap: 4px; }
+
+    .fb {
+      font-size: 11px;
+      color: #475569;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 2px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      background: #fff;
+      transition: border-color .15s, background .15s;
+      position: relative;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .fb:hover { border-color: #00843D; background: #f0fdf4; }
+    .fb.has-file { border-color: #6ee7b7; background: #f0fdf4; color: #065f46; }
+    .fb input[type=file] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .fb-ext {
+      font-size: 8px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      padding: 0 4px;
+      color: #64748b;
+      pointer-events: none;
+    }
+    .fb-check {
+      color: #059669;
+      font-weight: 700;
+      font-size: 11px;
+      display: none;
+      pointer-events: none;
+    }
+    .fb.has-file .fb-check { display: inline; }
+    .fb-filename {
+      font-size: 9px;
+      color: #059669;
+      font-weight: 600;
+      pointer-events: none;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: none;
+    }
+    .fb.has-file .fb-filename { display: inline; }
+
+    .status {
+      min-height: 16px;
+      font-size: 11px;
+      padding: 0 2px;
+      color: #64748b;
+    }
+    .status.ok { color: #059669; }
+    .status.warn { color: #b45309; }
+    .status.error { color: #b91c1c; }
+
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .workspace-columns {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .panel {
+      background: #fff;
+      border: 1px solid #d7dee8;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .ph {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 16px;
+      border-bottom: 2px solid #00843D;
+      background: #e6f4ec;
+      user-select: none;
+    }
+    .pi { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+    .pt { font-size: 13px; font-weight: 700; color: #006633; flex: 1; }
+    .pst {
+      font-size: 10px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 99px;
+      padding: 2px 10px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .chev { font-size: 11px; color: #94a3b8; flex-shrink: 0; }
+    .pb { display: block; }
+    .panel-inner { padding: 12px; }
+    .sub { color: #64748b; font-size: 12px; margin-bottom: 8px; }
+
+    .filter-stack {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .control-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .control-wrap label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    select, input[type="date"], input[type="text"] {
+      height: 32px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 0 8px;
+      font-size: 12px;
+      color: #1e293b;
+      background: #fff;
+    }
+
+    .dossier-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: calc(100vh - 260px);
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .dossier-item {
+      width: 100%;
+      border: 1px solid #d7dee8;
+      border-radius: 6px;
+      background: #fff;
+      padding: 9px 10px;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .dossier-item:hover {
+      border-color: #86efac;
+      background: #f0fdf4;
+    }
+    .dossier-item.active {
+      border-color: #16a34a;
+      background: #eafaf1;
+    }
+    .dossier-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+    .dossier-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .dossier-empty {
+      font-size: 12px;
+      color: #64748b;
+      border: 1px dashed #cbd5e1;
+      border-radius: 6px;
+      padding: 10px;
+      background: #f8fafc;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px;
+      background: #f8fafc;
+    }
+    .card .label {
+      color: #64748b;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .card .value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+      word-break: break-word;
+    }
+    .card .value.value-places {
+      font-size: 14px;
+      line-height: 1.3;
+      font-weight: 600;
+    }
+
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d7dee8; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-size: 12px; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+    th {
+      background: #f8fafc;
+      color: #334155;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tr.total-row td { font-weight: 700; background: #f8fafc; }
+    .hidden { display: none !important; }
+
+    .regression-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(680px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .regression-section-header {
+      grid-column: 1 / -1;
+      font-size: 12px;
+      font-weight: 700;
+      color: #065f46;
+      background: #e6f4ec;
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 7px 10px;
+    }
+    .regression-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background: #fff;
+      padding: 12px;
+    }
+    .regression-card h4 {
+      font-size: 14px;
+      color: #334155;
+      margin-bottom: 10px;
+    }
+    .regression-canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 460px;
+      max-height: 460px;
+      overflow: hidden;
+    }
+    .regression-canvas-wrap canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .week-select-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .week-dropdown-wrap { position: relative; display: inline-block; }
+    .week-dropdown-btn {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 6px 12px; border-radius: 6px; border: 1px solid #e2e8f0;
+      background: #fff; font-size: 13px; color: #1e293b; min-width: 220px;
+      justify-content: space-between; user-select: none;
+    }
+    .week-dropdown-btn:hover { border-color: #22c55e; background: #f0fdf4; }
+    .week-dropdown-btn .wdb-label { flex: 1; text-align: left; }
+    .week-dropdown-btn .wdb-chev { font-size: 10px; color: #64748b; transition: transform 0.15s; }
+    .week-dropdown-btn.open .wdb-chev { transform: rotate(180deg); }
+    .week-dropdown-panel {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.10); min-width: 240px; padding: 6px 0;
+      max-height: 280px; overflow-y: auto;
+    }
+    .week-dropdown-panel.open { display: block; }
+    .week-dropdown-panel .wdp-actions {
+      display: flex; gap: 6px; padding: 4px 10px 8px;
+      border-bottom: 1px solid #f1f5f9; margin-bottom: 4px;
+    }
+    .week-dropdown-panel .wdp-actions button {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+      border: 1px solid #e2e8f0; background: #f1f5f9; color: #475569;
+    }
+    .week-dropdown-panel .wdp-actions button:hover { background: #e2e8f0; }
+    .week-dropdown-panel label {
+      display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+      font-size: 13px; font-weight: 400; cursor: pointer; color: #1e293b;
+    }
+    .week-dropdown-panel label:hover { background: #f0fdf4; }
+    .week-dropdown-panel input[type=checkbox] { accent-color: #22c55e; width: 14px; height: 14px; cursor: pointer; }
+    .week-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .week-kpi-value { font-size: 16px !important; }
+    .kpi-sd {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 3px;
+      font-weight: 500;
+    }
+    .week-lp-section {
+      margin-bottom: 18px;
+      border: 1px solid #d7dee8;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .week-lp-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #065f46;
+      background: #e6f4ec;
+      border-bottom: 1px solid #bbf7d0;
+      padding: 8px 12px;
+    }
+    .week-lp-inner { padding: 12px; }
+    .week-dossier-row { cursor: pointer; }
+    .week-dossier-row:hover td { background: #f0fdf4; }
+
+    @media (max-width: 1200px) {
+      .workspace-columns {
+        grid-template-columns: 1fr;
+      }
+      .dossier-list {
+        max-height: 320px;
+      }
+      .regression-grid {
+        grid-template-columns: 1fr;
+      }
+      .regression-canvas-wrap {
+        height: 360px;
+        max-height: 360px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">BAM <span>Wood Concepts</span> &mdash; Wessels Analyse</div>
+  </header>
+  <main>
+    <div class="upload-box open" id="upload-box">
+      <div class="ub-header" onclick="document.getElementById('upload-box').classList.toggle('open')">
+        <span style="font-size:13px">📁</span>
+        <h3>Bestanden</h3>
+        <span class="ub-toggle">&#9660;</span>
+      </div>
+      <div class="ub-body">
+        <div class="ub-group">
+          <div class="ub-group-title"><span class="ub-group-icon">📊</span>ordersTPE<span class="ub-group-status" id="file-status">geen bestand</span></div>
+          <div class="ub-files">
+            <label class="fb" id="fb-excel">
+              <input id="excelFile" type="file" accept=".xlsx,.xls">
+              <span class="fb-check">✓</span>Transportbestand<span class="fb-ext">.xlsx</span>
+              <span class="fb-filename" id="excel-file-name"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="status" class="status"></div>
+
+    <div id="workspace" class="workspace hidden">
+
+      <div id="weekPanel" class="panel">
+        <div class="ph">
+          <span class="pi">📅</span>
+          <span class="pt">Week overzicht</span>
+          <span class="pst">Per losplaats</span>
+          <span class="chev">&#9660;</span>
+        </div>
+        <div class="pb">
+          <div class="panel-inner">
+            <div class="week-select-row">
+              <div class="control-wrap">
+                <label>Weeknummer</label>
+                <div class="week-dropdown-wrap" id="weekDropdownWrap">
+                  <div class="week-dropdown-btn" id="weekDropdownBtn" onclick="toggleWeekDropdown()">
+                    <span class="wdb-label" id="weekDropdownLabel">Selecteer weken…</span>
+                    <span class="wdb-chev">▼</span>
+                  </div>
+                  <div class="week-dropdown-panel" id="weekDropdownPanel">
+                    <div class="wdp-actions">
+                      <button onclick="selectAllWeeks()">Alles</button>
+                      <button onclick="deselectAllWeeks()">Wissen</button>
+                    </div>
+                    <div id="weekCheckboxes"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="weekContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="workspace-columns">
+        <div class="panel">
+        <div class="ph">
+          <span class="pi">🗂</span>
+          <span class="pt">Dossiers</span>
+          <span class="pst" id="dossierCount">0</span>
+          <span class="chev">&#9660;</span>
+        </div>
+        <div class="pb">
+          <div class="panel-inner">
+            <div class="filter-stack">
+              <div class="control-wrap">
+                <label for="dateFrom">Datum van</label>
+                <input id="dateFrom" type="date" disabled>
+              </div>
+              <div class="control-wrap">
+                <label for="dateTo">Datum tot</label>
+                <input id="dateTo" type="date" disabled>
+              </div>
+              <div class="control-wrap">
+                <label for="projectFilter">Projectfilter</label>
+                <select id="projectFilter" disabled>
+                  <option value="ALL">Alle projecten</option>
+                </select>
+              </div>
+              <div class="control-wrap">
+                <label for="dossierSearch">Zoek dossier</label>
+                <input id="dossierSearch" type="text" placeholder="bijv. 526049">
+              </div>
+            </div>
+            <div id="dossierList" class="dossier-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-column">
+        <div id="summaryPanel" class="panel hidden">
+          <div class="ph">
+            <span class="pi">📈</span>
+            <span class="pt">Dossier samenvatting</span>
+            <span class="pst">Geselecteerd dossier</span>
+            <span class="chev">&#9660;</span>
+          </div>
+          <div class="pb">
+            <div class="panel-inner">
+              <div class="cards" id="summaryCards"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tablePanel" class="panel hidden">
+          <div class="ph">
+            <span class="pi">🚚</span>
+            <span class="pt">Overzicht per zending</span>
+            <span class="pst">Aanvoer / Afvoer</span>
+            <span class="chev">&#9660;</span>
+          </div>
+          <div class="pb">
+            <div class="panel-inner" style="padding-top:0;">
+              <div style="overflow:auto; max-height:70vh;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Rit</th>
+                      <th>Losplaats</th>
+                      <th>Laadplaats</th>
+                      <th>Type</th>
+                      <th>Uren laden</th>
+                      <th>Uren lossen</th>
+                      <th>Tariefaantal</th>
+                      <th>Rijtijd</th>
+                      <th>Eenheidsprijs</th>
+                      <th>Kosten</th>
+                    </tr>
+                  </thead>
+                  <tbody id="resultBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="regressionPanel" class="panel hidden">
+          <div class="ph">
+            <span class="pi">📉</span>
+            <span class="pt">Grafieken per dossier</span>
+            <span class="pst">Individuele punten</span>
+            <span class="chev">&#9660;</span>
+          </div>
+          <div class="pb">
+            <div class="panel-inner">
+              <div id="regressionGrid" class="regression-grid"></div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>  <!-- /workspace-columns -->
+    </div>
+  </main>
+
+  <script>
+    const UNKNOWN_DATE_KEY = "__UNKNOWN_DATE__";
+    const UNKNOWN_PROJECT_LABEL = "Onbekend";
+    const LOCATION_CATEGORIES = ["oudkarspel", "heerhugowaard", "rijssen", "projectlocatie"];
+    const LOCATION_LABELS = {
+      oudkarspel: "Oudkarspel",
+      heerhugowaard: "Heerhugowaard",
+      rijssen: "Rijssen",
+      projectlocatie: "Project locatie"
+    };
+
+    const FIELD_CONFIG = {
+      dossier: { label: "Dossiernummer", aliases: ["dossier", "dosier", "dossiernummer", "dossiernr", "dossier nummer"] },
+      project: { label: "Project", aliases: ["project", "projectnaam", "projectnummer", "projectnr", "project nummer", "project nr", "werk"] },
+      laadLocatie: { label: "Laadlocatie", aliases: ["laadlocatie", "laad locatie", "laadlokatie", "locatie laden", "laadadres", "laad adres", "vertrekadres", "vertrek adres", "vertreklocatie", "vertrek locatie", "herkomst", "laadplaats", "ophaallocatie", "ophaal locatie", "ophaaladres", "ophaal adres"] },
+      losLocatie: { label: "Loslocatie", aliases: ["loslocatie", "los locatie", "loslokatie", "locatie lossen", "lossingslocatie", "losadres", "afleveradres", "afleverlocatie", "bestemming", "losplaats", "plaats van lossen", "los bestemming"] },
+      datum: { label: "Datum", aliases: ["datum", "laaddatum", "losdatum", "transportdatum", "ritdatum", "orderdatum", "boekingsdatum"] },
+      zending: { label: "Zending", aliases: ["zending", "zendingnummer", "shipment", "rit", "ritnummer", "transport"] },
+      richting: { label: "Aanvoer/Afvoer", aliases: ["aanvoerafvoer", "aanvoer", "afvoer", "richting", "soort"] },
+      urenLaden: { label: "Uren laden", aliases: ["urenladen", "urenlaad", "laadtijd", "laaduren", "ladenuren", "urenla"] },
+      urenLossen: { label: "Uren lossen", aliases: ["urenlossen", "lostijd", "losuren", "lossenuren", "urenlo"] },
+
+      tariefaantal: { label: "Tariefaantal", aliases: ["tariefaantal", "tariefaantaluren", "tarief", "tariefuren"] },
+      eenheidsprijs: { label: "Eenheidsprijs", aliases: ["eenheidsprijs", "prijsper", "prijsperuur", "uurtarief"] },
+      kosten: { label: "Totale kosten", aliases: ["totalekosten", "totaalkosten", "kosten", "bedrag", "totaalbedrag", "regelkosten"] }
+    };
+
+    // Vaste kolomindices op basis van exacte kolomletters (0-gebaseerd)
+    const FIXED_COLUMNS = {
+      zending:       0,  // Kolom A  – ritnummer (incl. toevoeging)
+      dossier:       1,  // Kolom B  – dossiernummer (intern referentie)
+      dossierRef:    3,  // Kolom D  – dossierreferentie (groeperingssleutel)
+      voertuigType: 18,  // Kolom S  – type voertuig (trekker/dieplader/combi kraan)
+      laadLocatie:  23,  // Kolom X  – laadplaats
+      losLocatie:   30,  // Kolom AE – losplaats / projectnaam
+      tariefaantal: 44,  // Kolom AS – tariefaantal uren
+      eenheidsprijs: 47, // Kolom AV – eenheidsprijs
+      kosten:        51, // Kolom AZ – kosten
+      urenLaden:    95,  // Kolom CR – uren laden
+      urenLossen:   96   // Kolom CS – uren lossen
+    };
+    const state = {
+      rows: [],
+      headers: [],
+      headerRowIndex: 0,
+      selectedSheetName: "",
+      records: [],
+      dossiers: [],
+      warnings: [],
+      selectedDossier: "",
+      filters: {
+        dateFrom: "",
+        dateTo: "",
+        project: "ALL",
+        dossierSearch: ""
+      },
+      charts: [],
+      chartsNeedRebuild: true
+    };
+
+    const statusEl = document.getElementById("status");
+    const workspaceEl = document.getElementById("workspace");
+    const excelFileEl = document.getElementById("excelFile");
+    const excelFileNameEl = document.getElementById("excel-file-name");
+    const fbExcelEl = document.getElementById("fb-excel");
+    const fileStatusEl = document.getElementById("file-status");
+    const dateFromEl = document.getElementById("dateFrom");
+    const dateToEl = document.getElementById("dateTo");
+    const projectFilterEl = document.getElementById("projectFilter");
+    const dossierCountEl = document.getElementById("dossierCount");
+    const dossierSearchEl = document.getElementById("dossierSearch");
+    const dossierListEl = document.getElementById("dossierList");
+    const summaryPanelEl = document.getElementById("summaryPanel");
+    const summaryCardsEl = document.getElementById("summaryCards");
+    const tablePanelEl = document.getElementById("tablePanel");
+    const resultBodyEl = document.getElementById("resultBody");
+    const regressionPanelEl = document.getElementById("regressionPanel");
+    const regressionGridEl = document.getElementById("regressionGrid");
+
+    function normalizeText(value) {
+      return String(value ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "");
+    }
+
+    function parseNumber(value) {
+      if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+      if (value === null || value === undefined) return NaN;
+      let str = String(value).trim();
+      if (!str) return NaN;
+
+      let negative = false;
+      if (str.startsWith("(") && str.endsWith(")")) {
+        negative = true;
+        str = str.slice(1, -1);
+      }
+
+      str = str.replace(/\s+/g, "").replace(/€/g, "");
+      const hasComma = str.includes(",");
+      const hasDot = str.includes(".");
+      if (hasComma && hasDot) {
+        if (str.lastIndexOf(",") > str.lastIndexOf(".")) str = str.replace(/\./g, "").replace(",", ".");
+        else str = str.replace(/,/g, "");
+      } else if (hasComma) {
+        str = str.replace(",", ".");
+      }
+
+      str = str.replace(/[^0-9.+-]/g, "");
+      if (!str || str === "." || str === "-" || str === "+") return NaN;
+      const parsed = parseFloat(str);
+      if (!Number.isFinite(parsed)) return NaN;
+      return negative ? -parsed : parsed;
+    }
+
+    function pad2(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function toIsoDate(y, m, d) {
+      return `${String(y).padStart(4, "0")}-${pad2(m)}-${pad2(d)}`;
+    }
+
+    function isoToDisplayDate(iso) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+      const [y, m, d] = iso.split("-");
+      return `${d}-${m}-${y}`;
+    }
+
+    function tryBuildDate(y, m, d) {
+      const date = new Date(y, m - 1, d);
+      if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+      return date;
+    }
+
+    function parseDateInfo(rawValue) {
+      if (rawValue === null || rawValue === undefined || String(rawValue).trim() === "") {
+        return { key: UNKNOWN_DATE_KEY, label: "Onbekend" };
+      }
+
+      if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+        const iso = toIsoDate(rawValue.getFullYear(), rawValue.getMonth() + 1, rawValue.getDate());
+        return { key: iso, label: isoToDisplayDate(iso) };
+      }
+
+      if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+        const parsed = XLSX?.SSF?.parse_date_code ? XLSX.SSF.parse_date_code(rawValue) : null;
+        if (parsed && parsed.y && parsed.m && parsed.d) {
+          const iso = toIsoDate(parsed.y, parsed.m, parsed.d);
+          return { key: iso, label: isoToDisplayDate(iso) };
+        }
+      }
+
+      const s = String(rawValue).trim();
+      if (!s) return { key: UNKNOWN_DATE_KEY, label: "Onbekend" };
+
+      let match = s.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})$/);
+      if (match) {
+        const y = Number(match[1]);
+        const m = Number(match[2]);
+        const d = Number(match[3]);
+        if (tryBuildDate(y, m, d)) {
+          const iso = toIsoDate(y, m, d);
+          return { key: iso, label: isoToDisplayDate(iso) };
+        }
+      }
+
+      match = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+      if (match) {
+        const d = Number(match[1]);
+        const m = Number(match[2]);
+        const y = Number(match[3]) < 100 ? 2000 + Number(match[3]) : Number(match[3]);
+        if (tryBuildDate(y, m, d)) {
+          const iso = toIsoDate(y, m, d);
+          return { key: iso, label: isoToDisplayDate(iso) };
+        }
+      }
+
+      const asDate = new Date(s);
+      if (!Number.isNaN(asDate.getTime())) {
+        const iso = toIsoDate(asDate.getFullYear(), asDate.getMonth() + 1, asDate.getDate());
+        return { key: iso, label: isoToDisplayDate(iso) };
+      }
+
+      return { key: `txt:${s}`, label: s };
+    }
+
+    function formatHours(value) {
+      return Number(value || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatEuro(value) {
+      return Number(value || 0).toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+    }
+
+    function setStatus(text, type = "") {
+      statusEl.className = `status ${type}`.trim();
+      statusEl.textContent = text;
+    }
+
+    function findOrdersSheetName(sheetNames) {
+      const normalized = sheetNames.map(name => ({ original: name, norm: normalizeText(name) }));
+      const exact = normalized.find(s => s.norm === "orderstpe");
+      if (exact) return exact.original;
+      const containsBoth = normalized.find(s => s.norm.includes("orders") && s.norm.includes("tpe"));
+      if (containsBoth) return containsBoth.original;
+      const fallback = normalized.find(s => s.norm.includes("order") || s.norm.includes("tpe"));
+      return fallback ? fallback.original : sheetNames[0];
+    }
+
+    function aliasScore(cellNormalized, aliases) {
+      if (!cellNormalized) return 0;
+      let best = 0;
+      for (const alias of aliases) {
+        const aliasNorm = normalizeText(alias);
+        if (!aliasNorm) continue;
+        if (cellNormalized === aliasNorm) best = Math.max(best, 5);
+        else if (cellNormalized.includes(aliasNorm)) best = Math.max(best, 3);
+        else if (aliasNorm.includes(cellNormalized) && cellNormalized.length >= 5) best = Math.max(best, 1);
+      }
+      return best;
+    }
+
+    function detectHeaderRow(rows) {
+      const maxRows = Math.min(rows.length, 40);
+      let bestIndex = 0;
+      let bestScore = -1;
+      for (let i = 0; i < maxRows; i++) {
+        const row = rows[i] || [];
+        const matchedFields = new Set();
+        let detailScore = 0;
+        for (const cell of row) {
+          const normalizedCell = normalizeText(cell);
+          if (!normalizedCell) continue;
+          for (const [fieldKey, config] of Object.entries(FIELD_CONFIG)) {
+            const score = aliasScore(normalizedCell, config.aliases);
+            if (score > 0) {
+              matchedFields.add(fieldKey);
+              detailScore += score;
+            }
+          }
+        }
+        const score = matchedFields.size * 10 + detailScore;
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+      return bestIndex;
+    }
+
+    function buildHeaders(row) {
+      return (row || []).map((cell, index) => {
+        const label = String(cell ?? "").trim();
+        return label || `Kolom ${index + 1}`;
+      });
+    }
+
+    function detectMapping(headers) {
+      const mapping = {};
+      const normalizedHeaders = headers.map(h => normalizeText(h));
+      for (const [fieldKey, config] of Object.entries(FIELD_CONFIG)) {
+        let bestIndex = -1;
+        let bestScore = 0;
+        normalizedHeaders.forEach((headerNorm, idx) => {
+          const score = aliasScore(headerNorm, config.aliases);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIndex = idx;
+          }
+        });
+        mapping[fieldKey] = bestScore > 0 ? bestIndex : -1;
+      }
+      return mapping;
+    }
+
+    function getCellValue(row, index) {
+      if (!row || !Number.isInteger(index) || index < 0) return "";
+      return row[index];
+    }
+
+    function normalizeDirection(value) {
+      const n = normalizeText(value);
+      if (!n) return "onbekend";
+      if (n.includes("aan")) return "aanvoer";
+      if (n.includes("af")) return "afvoer";
+      return "onbekend";
+    }
+
+    function tokenizeForLocation(value) {
+      const stopwords = new Set([
+        "de", "het", "een", "van", "en", "te", "op", "aan", "bij", "met", "voor",
+        "project", "projecten", "woning", "woningen", "blok", "fase", "bouw", "locatie",
+        "loslocatie", "adres", "straat", "laan", "weg", "straatnaam"
+      ]);
+      const raw = String(value ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+      if (!raw) return new Set();
+      return new Set(
+        raw
+          .split(/\s+/)
+          .filter(token => token.length >= 3 && !stopwords.has(token))
+      );
+    }
+
+    function getKnownSiteCategory(text) {
+      const raw = String(text ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      const compact = raw.replace(/[^a-z0-9]/g, "");
+      if (!compact) return "";
+
+      const spaced = raw.replace(/[^a-z0-9]+/g, " ");
+      if (compact.includes("oudkarspel") || /\boud\s*karspel\b/.test(spaced) || /\boks\b/.test(spaced) || compact.includes("oks")) {
+        return "oudkarspel";
+      }
+      if (
+        compact.includes("heerhugowaard") ||
+        compact.includes("heerhugo") ||
+        compact.includes("hugowaard") ||
+        /\bheer\s*hugo(?:waard)?\b/.test(spaced) ||
+        /\bhhw\b/.test(spaced) ||
+        compact.includes("hhw")
+      ) {
+        return "heerhugowaard";
+      }
+      if (compact.includes("rijssen") || /\brijssen\b/.test(spaced) || /\brjsn?\b/.test(spaced) || compact.includes("rjsn")) {
+        return "rijssen";
+      }
+      return "";
+    }
+
+    function detectLaadCategory(projectText, laadLocationText, fallbackText = "") {
+      const projectNorm = normalizeText(projectText);
+      const laadNorm = normalizeText(laadLocationText);
+      const projectTokens = tokenizeForLocation(projectText);
+      const laadTokens = tokenizeForLocation(laadLocationText);
+      const laadSite = getKnownSiteCategory(laadLocationText);
+      const fallbackSite = getKnownSiteCategory(fallbackText);
+
+      if (laadSite) return laadSite;
+      if (fallbackSite) return fallbackSite;
+
+      let laadOverlap = 0;
+      laadTokens.forEach(token => {
+        if (projectTokens.has(token)) laadOverlap += 1;
+      });
+
+      const directMatch = Boolean(
+        projectNorm &&
+        laadNorm &&
+        Math.min(projectNorm.length, laadNorm.length) >= 8 &&
+        (projectNorm.includes(laadNorm) || laadNorm.includes(projectNorm))
+      );
+      if (directMatch || laadOverlap >= 2) return "projectlocatie";
+
+      if (!laadNorm) return "onbekend";
+      if (!projectNorm) return "projectlocatie";
+
+      // Laadlocatie gevuld maar geen bekende vaste site: behandel als projectlocatie
+      return "projectlocatie";
+    }
+
+    function normalizeLosplaatsKey(value) {
+      return normalizeText(value) || "__onbekend__";
+    }
+
+    function emptyMetrics() {
+      return {
+        count: 0,
+        laden: 0,
+        lossen: 0,
+        rijtijd: 0,
+        tarief: 0,
+        kosten: 0,
+        unitWeightValue: 0,
+        unitWeightQty: 0
+      };
+    }
+
+    function addToMetrics(bucket, row) {
+      bucket.count += 1;
+      if (Number.isFinite(row.urenLaden)) bucket.laden += row.urenLaden;
+      if (Number.isFinite(row.urenLossen)) bucket.lossen += row.urenLossen;
+      if (Number.isFinite(row.rijtijd)) bucket.rijtijd += row.rijtijd;
+      if (Number.isFinite(row.tariefaantal)) bucket.tarief += row.tariefaantal;
+      if (Number.isFinite(row.kosten)) bucket.kosten += row.kosten;
+
+      if (Number.isFinite(row.eenheidsprijs) && Number.isFinite(row.tariefaantal) && row.tariefaantal !== 0) {
+        bucket.unitWeightValue += row.eenheidsprijs * row.tariefaantal;
+        bucket.unitWeightQty += row.tariefaantal;
+      } else if (Number.isFinite(row.eenheidsprijs)) {
+        bucket.unitWeightValue += row.eenheidsprijs;
+        bucket.unitWeightQty += 1;
+      }
+    }
+
+    function getUnitPrice(metrics) {
+      if (!metrics.unitWeightQty) return NaN;
+      return metrics.unitWeightValue / metrics.unitWeightQty;
+    }
+
+    function parseRowsWithMapping(mapping) {
+      const warnings = [];
+
+      if (!Number.isInteger(mapping.datum) || mapping.datum < 0) {
+        warnings.push("Datumkolom niet gevonden. Datumfilter zal alleen 'Onbekend' tonen.");
+      }
+      if (!Number.isInteger(mapping.laadLocatie) || mapping.laadLocatie < 0) {
+        warnings.push("Laadlocatie kolom niet gevonden. Categorisatie voor laadlocatie-grafieken is beperkt.");
+      }
+
+      const records = [];
+
+      for (let i = state.headerRowIndex + 1; i < state.rows.length; i++) {
+        const row = state.rows[i];
+        if (!row || row.every(cell => String(cell ?? "").trim() === "")) continue;
+
+        // Dossiernummer uit vaste kolom B (index 1) – rijen zonder dossier overslaan
+        const dossier = String(row[FIXED_COLUMNS.dossier] ?? "").trim();
+        if (!dossier) continue;
+
+        // Dossierreferentie uit vaste kolom D (index 3)
+        const dossierRef = String(row[FIXED_COLUMNS.dossierRef] ?? "").trim();
+
+        // Ritnummer uit vaste kolom A (index 0)
+        const zending = String(row[FIXED_COLUMNS.zending] ?? "").trim() || dossier;
+
+        // Losplaats / projectnaam uit vaste kolom AE (index 30)
+        const losLocatie = String(row[FIXED_COLUMNS.losLocatie] ?? "").trim();
+        const project = losLocatie || UNKNOWN_PROJECT_LABEL;
+
+        // Laadlocatie uit vaste kolom X (index 23)
+        const laadLocatie = String(row[FIXED_COLUMNS.laadLocatie] ?? "").trim();
+
+        // Datum via alias-detectie (optioneel, voor datumfilter)
+        const dateInfo = (Number.isInteger(mapping.datum) && mapping.datum >= 0)
+          ? parseDateInfo(getCellValue(row, mapping.datum))
+          : { key: UNKNOWN_DATE_KEY, label: "Onbekend" };
+
+        const rowText = row.map(cell => String(cell ?? "")).join(" ");
+        const locationCategory = detectLaadCategory(project, laadLocatie, rowText);
+
+        // Kernvelden uit vaste kolomindices
+        const voertuigType  = String(row[FIXED_COLUMNS.voertuigType] ?? "").trim();
+        const urenLaden     = parseNumber(row[FIXED_COLUMNS.urenLaden]);
+        const urenLossen    = parseNumber(row[FIXED_COLUMNS.urenLossen]);
+        const tariefaantal  = parseNumber(row[FIXED_COLUMNS.tariefaantal]);
+        const laadLosSum    = (Number.isFinite(urenLaden) ? urenLaden : 0) + (Number.isFinite(urenLossen) ? urenLossen : 0);
+        const rijtijd       = Number.isFinite(tariefaantal) ? tariefaantal - laadLosSum : NaN;
+        const eenheidsprijs = parseNumber(row[FIXED_COLUMNS.eenheidsprijs]);
+        let kosten          = parseNumber(row[FIXED_COLUMNS.kosten]);
+        if (!Number.isFinite(kosten) && Number.isFinite(eenheidsprijs) && Number.isFinite(tariefaantal)) {
+          kosten = eenheidsprijs * tariefaantal;
+        }
+
+        // Samengestelde groeperingssleutel: dossierRef (kol D) + losLocatie
+        // Zo worden twee projecten met dezelfde referentie apart gehouden.
+        // Fallback op dossiernummer (kol B) als kolom D leeg is.
+        const dossierKey   = dossierRef ? `${dossierRef}|||${losLocatie}` : `__B__${dossier}`;
+        const dossierLabel = dossierRef || dossier;
+
+        records.push({
+          dossier,
+          dossierRef,
+          dossierKey,
+          dossierLabel,
+          project,
+          laadLocatie,
+          losLocatie,
+          losplaatsKey: normalizeLosplaatsKey(losLocatie),
+          datumKey: dateInfo.key,
+          datumLabel: dateInfo.label,
+          zending,
+          richting: "onbekend",
+          voertuigType,
+          locationCategory,
+          urenLaden,
+          urenLossen,
+          tariefaantal,
+          rijtijd,
+          eenheidsprijs,
+          kosten
+        });
+      }
+
+      return { records, warnings };
+    }
+
+    function buildDossierMeta(records) {
+      const map = new Map();
+
+      records.forEach(row => {
+        if (!map.has(row.dossierKey)) {
+          map.set(row.dossierKey, {
+            dossierKey:   row.dossierKey,
+            dossierLabel: row.dossierLabel,
+            dossier:      row.dossier,
+            count: 0,
+            dateCounts: new Map(),
+            projectCounts: new Map()
+          });
+        }
+
+        const meta = map.get(row.dossierKey);
+        meta.count += 1;
+        meta.dateCounts.set(row.datumKey, (meta.dateCounts.get(row.datumKey) || 0) + 1);
+        meta.projectCounts.set(row.project, (meta.projectCounts.get(row.project) || 0) + 1);
+      });
+
+      return [...map.values()].map(meta => {
+        const dateKeys = [...meta.dateCounts.keys()];
+        const projects = [...meta.projectCounts.keys()];
+
+        const primaryDateKey = pickMostCommon(meta.dateCounts, UNKNOWN_DATE_KEY);
+        const primaryProject = pickMostCommon(meta.projectCounts, UNKNOWN_PROJECT_LABEL);
+
+        return {
+          dossier:      meta.dossierKey,   // intern gebruikt als sleutel (voor achterwaartse compatibiliteit)
+          dossierKey:   meta.dossierKey,
+          dossierLabel: meta.dossierLabel, // weergave-label
+          count: meta.count,
+          dateKeys,
+          projects,
+          primaryDateKey,
+          primaryDateLabel: primaryDateKey.startsWith("txt:") ? primaryDateKey.slice(4) : (primaryDateKey === UNKNOWN_DATE_KEY ? "Onbekend" : isoToDisplayDate(primaryDateKey)),
+          primaryProject
+        };
+      });
+    }
+
+    function pickMostCommon(countMap, fallbackKey) {
+      let bestKey = fallbackKey;
+      let bestCount = -1;
+      countMap.forEach((count, key) => {
+        if (count > bestCount) {
+          bestCount = count;
+          bestKey = key;
+        } else if (count === bestCount && bestKey === fallbackKey && key !== fallbackKey) {
+          bestKey = key;
+        }
+      });
+      return bestKey;
+    }
+
+    function dateKeyComparator(a, b) {
+      if (a === b) return 0;
+      if (a === UNKNOWN_DATE_KEY) return 1;
+      if (b === UNKNOWN_DATE_KEY) return -1;
+      const aIso = /^\d{4}-\d{2}-\d{2}$/.test(a);
+      const bIso = /^\d{4}-\d{2}-\d{2}$/.test(b);
+      if (aIso && bIso) return b.localeCompare(a);
+      if (aIso) return -1;
+      if (bIso) return 1;
+      return a.localeCompare(b, "nl-NL", { sensitivity: "base" });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function fillSelectOptions(selectEl, options, selectedValue) {
+      selectEl.innerHTML = "";
+      options.forEach(option => {
+        const el = document.createElement("option");
+        el.value = option.value;
+        el.textContent = option.label;
+        selectEl.appendChild(el);
+      });
+      const hasSelected = options.some(option => option.value === selectedValue);
+      selectEl.value = hasSelected ? selectedValue : options[0].value;
+    }
+
+    function refreshFilterOptions() {
+      const projectSet = new Set();
+      const isoDateSet = new Set();
+
+      state.dossiers.forEach(dossier => {
+        dossier.dateKeys.forEach(key => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(key)) isoDateSet.add(key);
+        });
+        dossier.projects.forEach(project => projectSet.add(project || UNKNOWN_PROJECT_LABEL));
+      });
+
+      const isoDates = [...isoDateSet].sort();
+      if (isoDates.length) {
+        dateFromEl.disabled = false;
+        dateToEl.disabled = false;
+        dateFromEl.min = isoDates[0];
+        dateFromEl.max = isoDates[isoDates.length - 1];
+        dateToEl.min = isoDates[0];
+        dateToEl.max = isoDates[isoDates.length - 1];
+      } else {
+        dateFromEl.disabled = true;
+        dateToEl.disabled = true;
+      }
+
+      if (state.filters.dateFrom && isoDates.length && (state.filters.dateFrom < isoDates[0] || state.filters.dateFrom > isoDates[isoDates.length - 1])) {
+        state.filters.dateFrom = "";
+      }
+      if (state.filters.dateTo && isoDates.length && (state.filters.dateTo < isoDates[0] || state.filters.dateTo > isoDates[isoDates.length - 1])) {
+        state.filters.dateTo = "";
+      }
+      dateFromEl.value = state.filters.dateFrom;
+      dateToEl.value = state.filters.dateTo;
+
+      const projectOptions = [{ value: "ALL", label: "Alle projecten" }];
+      [...projectSet]
+        .sort((a, b) => String(a).localeCompare(String(b), "nl-NL", { sensitivity: "base", numeric: true }))
+        .forEach(project => projectOptions.push({ value: project, label: project }));
+
+      fillSelectOptions(projectFilterEl, projectOptions, state.filters.project);
+      state.filters.project = projectFilterEl.value;
+      projectFilterEl.disabled = projectOptions.length <= 1;
+    }
+
+    function hasInvalidDateRange() {
+      return Boolean(state.filters.dateFrom && state.filters.dateTo && state.filters.dateFrom > state.filters.dateTo);
+    }
+
+    function dossierMatchesDateRange(dossier) {
+      if (!state.filters.dateFrom && !state.filters.dateTo) return true;
+      const isoDates = dossier.dateKeys.filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key));
+      if (!isoDates.length) return false;
+      return isoDates.some(iso => {
+        if (state.filters.dateFrom && iso < state.filters.dateFrom) return false;
+        if (state.filters.dateTo && iso > state.filters.dateTo) return false;
+        return true;
+      });
+    }
+
+    function getFilteredDossiers() {
+      if (hasInvalidDateRange()) return [];
+      const searchTerm = (state.filters.dossierSearch || "").toLowerCase().trim();
+      return state.dossiers
+        .filter(dossier => {
+          const dateMatch = dossierMatchesDateRange(dossier);
+          const projectMatch = state.filters.project === "ALL" || dossier.projects.includes(state.filters.project);
+          const searchMatch = !searchTerm || dossier.dossierLabel.toLowerCase().includes(searchTerm) || dossier.dossier.toLowerCase().includes(searchTerm);
+          return dateMatch && projectMatch && searchMatch;
+        })
+        .sort((a, b) => {
+          const dateCompare = dateKeyComparator(a.primaryDateKey, b.primaryDateKey);
+          if (dateCompare !== 0) return dateCompare;
+          return String(a.dossier).localeCompare(String(b.dossier), "nl-NL", { numeric: true, sensitivity: "base" });
+        });
+    }
+
+    function renderDossierList() {
+      const filtered = getFilteredDossiers();
+      dossierCountEl.textContent = `${filtered.length}`;
+
+      if (!filtered.length) {
+        const reason = hasInvalidDateRange()
+          ? "Van-datum mag niet later zijn dan tot-datum."
+          : "Geen dossiers gevonden voor de gekozen filters.";
+        dossierListEl.innerHTML = `<div class="dossier-empty">${escapeHtml(reason)}</div>`;
+        state.selectedDossier = "";
+        summaryPanelEl.classList.add("hidden");
+        tablePanelEl.classList.add("hidden");
+        regressionPanelEl.classList.add("hidden");
+        destroyCharts();
+        return;
+      }
+
+      const validSelection = filtered.some(item => item.dossier === state.selectedDossier);
+      if (!validSelection) state.selectedDossier = filtered[0].dossier;
+
+      const html = filtered.map(item => `
+        <button class="dossier-item ${item.dossier === state.selectedDossier ? "active" : ""}" data-dossier="${escapeHtml(item.dossier)}" type="button">
+          <div class="dossier-title">${escapeHtml(item.dossierLabel)}</div>
+          <div class="dossier-meta">
+            <span>📅 ${escapeHtml(item.primaryDateLabel)}</span>
+            <span>🏗 ${escapeHtml(item.primaryProject)}</span>
+          </div>
+        </button>
+      `).join("");
+
+      dossierListEl.innerHTML = html;
+      renderDossierAnalysis();
+    }
+
+    function destroyCharts() {
+      state.charts.forEach(chart => {
+        try { chart.destroy(); } catch (error) { console.error(error); }
+      });
+      state.charts = [];
+    }
+
+    function rowMatchesActiveFilters(row) {
+      const projectMatch = state.filters.project === "ALL" || row.project === state.filters.project;
+      if (!projectMatch) return false;
+
+      if (!state.filters.dateFrom && !state.filters.dateTo) return true;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.datumKey)) return false;
+      if (state.filters.dateFrom && row.datumKey < state.filters.dateFrom) return false;
+      if (state.filters.dateTo && row.datumKey > state.filters.dateTo) return false;
+      return true;
+    }
+
+    function sortRowsForCharts(a, b) {
+      const labelA = String(a.dossierLabel ?? a.dossier ?? "");
+      const labelB = String(b.dossierLabel ?? b.dossier ?? "");
+      const aNum = Number.parseFloat(labelA.replace(",", "."));
+      const bNum = Number.parseFloat(labelB.replace(",", "."));
+      if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum !== bNum) return aNum - bNum;
+      const dossierCompare = labelA.localeCompare(labelB, "nl-NL", { numeric: true, sensitivity: "base" });
+      if (dossierCompare !== 0) return dossierCompare;
+
+      const zendingCompare = String(a.zending ?? "").localeCompare(String(b.zending ?? ""), "nl-NL", { numeric: true, sensitivity: "base" });
+      if (zendingCompare !== 0) return zendingCompare;
+      return String(a.datumKey ?? "").localeCompare(String(b.datumKey ?? ""));
+    }
+
+    function buildPointSeries(rows, metricKey, rowFilter) {
+      const selected = rows.filter(rowFilter).sort(sortRowsForCharts);
+      const labels = [];
+      const values = [];
+      selected.forEach((row, index) => {
+        labels.push(row.zending || `zending ${index + 1}`);
+        values.push(Number.isFinite(row[metricKey]) ? row[metricKey] : null);
+      });
+      return { labels, values, count: selected.length };
+    }
+
+    function collectLaadplaatsKeys(rows) {
+      const map = new Map();
+      rows.forEach(row => {
+        const raw = String(row.laadLocatie ?? "").trim();
+        const key = normalizeText(raw) || "__onbekend__";
+        const label = raw || "Onbekend";
+        if (!map.has(key)) map.set(key, { key, label, count: 0 });
+        map.get(key).count += 1;
+      });
+      return [...map.values()]
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "nl-NL", { sensitivity: "base" }))
+        .map(item => ({ key: item.key, label: item.label }));
+    }
+
+    function collectLosplaatsKeys(rows) {
+      const map = new Map();
+
+      rows.forEach(row => {
+        const raw = String(row.losLocatie ?? "").trim();
+        const normalized = row.losplaatsKey || normalizeLosplaatsKey(raw);
+        const label = raw || "Onbekend";
+        if (!map.has(normalized)) {
+          map.set(normalized, { key: normalized, label, count: 0 });
+        }
+        map.get(normalized).count += 1;
+      });
+
+      return [...map.values()]
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "nl-NL", { sensitivity: "base" }))
+        .map(item => ({ key: item.key, label: item.label }));
+    }
+
+    function formatPlaceList(values) {
+      const unique = [...new Set(
+        values
+          .map(value => String(value ?? "").trim())
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b, "nl-NL", { sensitivity: "base" }));
+
+      if (!unique.length) return "Onbekend";
+      if (unique.length <= 4) return unique.join(" · ");
+      return `${unique.slice(0, 4).join(" · ")} +${unique.length - 4}`;
+    }
+
+    function renderRegressionCharts() {
+      const filteredRows = state.records.filter(rowMatchesActiveFilters);
+      if (!filteredRows.length) {
+        regressionPanelEl.classList.add("hidden");
+        destroyCharts();
+        return;
+      }
+
+      destroyCharts();
+      regressionGridEl.innerHTML = "";
+
+      if (typeof Chart !== "function") {
+        regressionGridEl.innerHTML = `<div class="dossier-empty">Grafiekbibliotheek niet geladen.</div>`;
+        regressionPanelEl.classList.remove("hidden");
+        return;
+      }
+
+      const lineColorByLocation = {
+        oudkarspel: "#2563eb",
+        heerhugowaard: "#16a34a",
+        rijssen: "#ca8a04",
+        projectlocatie: "#7c3aed"
+      };
+      const dynamicColors = [
+        "#0ea5e9", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6",
+        "#6366f1", "#84cc16", "#06b6d4", "#f97316", "#a855f7", "#10b981"
+      ];
+
+      function createRegressionChart(config, index) {
+        const title = config.title;
+        const series = buildPointSeries(filteredRows, config.metricKey, config.rowFilter);
+
+        const card = document.createElement("div");
+        card.className = "regression-card";
+        const heading = document.createElement("h4");
+        heading.textContent = title;
+
+        if (!series.count) {
+          const empty = document.createElement("div");
+          empty.className = "dossier-empty";
+          empty.textContent = "Geen data";
+          card.appendChild(heading);
+          card.appendChild(empty);
+          regressionGridEl.appendChild(card);
+          return;
+        }
+
+        const canvasWrap = document.createElement("div");
+        canvasWrap.className = "regression-canvas-wrap";
+        const canvas = document.createElement("canvas");
+        canvas.id = `regression-canvas-${index}`;
+        card.appendChild(heading);
+        canvasWrap.appendChild(canvas);
+        card.appendChild(canvasWrap);
+        regressionGridEl.appendChild(card);
+
+        const color = config.color || "#2563eb";
+
+        const chart = new Chart(canvas.getContext("2d"), {
+          type: "line",
+          data: {
+            labels: series.labels,
+            datasets: [
+              {
+                label: title,
+                data: series.values,
+                borderColor: color,
+                backgroundColor: color,
+                showLine: true,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+                tension: 0.2
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: true, labels: { boxWidth: 12, font: { size: 10 } } },
+              tooltip: { mode: "index", intersect: false }
+            },
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: {
+                title: { display: true, text: "Dossier · zending" },
+                ticks: { maxRotation: 45, minRotation: 0 }
+              },
+              y: {
+                title: { display: true, text: "Uren" },
+                beginAtZero: true
+              }
+            }
+          }
+        });
+        state.charts.push(chart);
+      }
+
+      let chartIndex = 0;
+      const loadingSection = document.createElement("div");
+      loadingSection.className = "regression-section-header";
+      loadingSection.textContent = "Uren laden (per laadplaats)";
+      regressionGridEl.appendChild(loadingSection);
+
+      const laadplaatsKeys = collectLaadplaatsKeys(filteredRows);
+      laadplaatsKeys.forEach((item, idx) => {
+        createRegressionChart(
+          {
+            metricKey: "urenLaden",
+            title: `Uren laden ${item.label}`,
+            color: dynamicColors[idx % dynamicColors.length],
+            rowFilter: row => (normalizeText(row.laadLocatie) || "__onbekend__") === item.key
+          },
+          chartIndex
+        );
+        chartIndex += 1;
+      });
+
+      const lossenSection = document.createElement("div");
+      lossenSection.className = "regression-section-header";
+      lossenSection.textContent = "Uren lossen (per losplaats)";
+      regressionGridEl.appendChild(lossenSection);
+
+      const losplaatsKeys = collectLosplaatsKeys(filteredRows);
+      losplaatsKeys.forEach((item, idx) => {
+        createRegressionChart(
+          {
+            metricKey: "urenLossen",
+            title: `Uren lossen ${item.label}`,
+            color: dynamicColors[idx % dynamicColors.length],
+            rowFilter: row => row.losplaatsKey === item.key
+          },
+          chartIndex
+        );
+        chartIndex += 1;
+      });
+
+      const rijtijdSection = document.createElement("div");
+      rijtijdSection.className = "regression-section-header";
+      rijtijdSection.textContent = "Rijtijd (per project)";
+      regressionGridEl.appendChild(rijtijdSection);
+
+      losplaatsKeys.forEach((item, idx) => {
+        createRegressionChart(
+          {
+            metricKey: "rijtijd",
+            title: `Rijtijd ${item.label}`,
+            color: dynamicColors[(idx + 4) % dynamicColors.length],
+            rowFilter: row => row.losplaatsKey === item.key
+          },
+          chartIndex
+        );
+        chartIndex += 1;
+      });
+
+      regressionPanelEl.classList.remove("hidden");
+    }
+
+    // ─── ISO week helpers ───────────────────────────────────────────────────
+    function getISOWeekInfo(isoDateStr) {
+      const d = new Date(Date.UTC(
+        +isoDateStr.slice(0, 4),
+        +isoDateStr.slice(5, 7) - 1,
+        +isoDateStr.slice(8, 10)
+      ));
+      const dayOfWeek = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayOfWeek); // Thursday of ISO week
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      return { year: d.getUTCFullYear(), week };
+    }
+
+    function rowWeekKey(row) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.datumKey)) return null;
+      const { year, week } = getISOWeekInfo(row.datumKey);
+      return `${year}-W${String(week).padStart(2, "0")}`;
+    }
+
+    function weekKeyToLabel(key) {
+      const m = key.match(/^(\d{4})-W(\d{2})$/);
+      return m ? `Week ${m[2]} – ${m[1]}` : key;
+    }
+
+    function refreshWeekSelect() {
+      const container = document.getElementById("weekCheckboxes");
+      if (!container) return;
+      const weeks = new Set();
+      state.records.forEach(row => { const k = rowWeekKey(row); if (k) weeks.add(k); });
+      const sorted = [...weeks].sort().reverse();
+      // Standaard: alleen de meest recente week aangevinkt
+      container.innerHTML = sorted.map((k, i) => `
+        <label>
+          <input type="checkbox" value="${escapeHtml(k)}" ${i === 0 ? "checked" : ""} onchange="updateWeekDropdownLabel(); renderWeekOverview()">
+          ${escapeHtml(weekKeyToLabel(k))}
+        </label>
+      `).join("");
+      updateWeekDropdownLabel();
+      renderWeekOverview();
+    }
+
+    function updateWeekDropdownLabel() {
+      const labelEl = document.getElementById("weekDropdownLabel");
+      if (!labelEl) return;
+      const selected = getSelectedWeeks();
+      if (!selected.length) { labelEl.textContent = "Geen week geselecteerd"; return; }
+      if (selected.length === 1) { labelEl.textContent = weekKeyToLabel(selected[0]); return; }
+      labelEl.textContent = `${selected.length} weken geselecteerd`;
+    }
+
+    function toggleWeekDropdown() {
+      const btn = document.getElementById("weekDropdownBtn");
+      const panel = document.getElementById("weekDropdownPanel");
+      if (!btn || !panel) return;
+      const isOpen = panel.classList.toggle("open");
+      btn.classList.toggle("open", isOpen);
+    }
+
+    function getSelectedWeeks() {
+      const container = document.getElementById("weekCheckboxes");
+      if (!container) return [];
+      return [...container.querySelectorAll("input[type=checkbox]:checked")].map(cb => cb.value);
+    }
+
+    function selectAllWeeks() {
+      const container = document.getElementById("weekCheckboxes");
+      if (!container) return;
+      container.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = true);
+      updateWeekDropdownLabel();
+      renderWeekOverview();
+    }
+
+    function deselectAllWeeks() {
+      const container = document.getElementById("weekCheckboxes");
+      if (!container) return;
+      container.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+      updateWeekDropdownLabel();
+      renderWeekOverview();
+    }
+
+    function renderWeekOverview() {
+      const weekContent = document.getElementById("weekContent");
+      if (!weekContent) return;
+
+      const selectedWeeks = getSelectedWeeks();
+      if (!selectedWeeks.length || !state.records.length) {
+        weekContent.innerHTML = '<div class="dossier-empty">Geen data beschikbaar.</div>';
+        return;
+      }
+
+      const selectedSet = new Set(selectedWeeks);
+      const weekRows = state.records.filter(r => selectedSet.has(rowWeekKey(r)));
+      if (!weekRows.length) {
+        weekContent.innerHTML = '<div class="dossier-empty">Geen data voor de gekozen weken.</div>';
+        return;
+      }
+
+      // Group: losplaats → dossierKey → trips
+      const lpMap = new Map();
+      weekRows.forEach(row => {
+        const lpKey = row.losplaatsKey || "__onbekend__";
+        const lpLabel = row.losLocatie || "Onbekend";
+        if (!lpMap.has(lpKey)) lpMap.set(lpKey, { label: lpLabel, dossiers: new Map() });
+        const lp = lpMap.get(lpKey);
+        if (!lp.dossiers.has(row.dossierKey)) lp.dossiers.set(row.dossierKey, { label: row.dossierLabel, trips: [] });
+        lp.dossiers.get(row.dossierKey).trips.push(row);
+      });
+
+      const sortedLp = [...lpMap.entries()].map(([key, data]) => {
+        const totaal = [...data.dossiers.values()].flatMap(d => d.trips)
+          .reduce((s, r) => s + (Number.isFinite(r.kosten) ? r.kosten : 0), 0);
+        return [key, data, totaal];
+      }).sort((a, b) => b[2] - a[2]);
+
+      let html = "";
+      sortedLp.forEach(([lpKey, lpData]) => {
+        const lpRows = [...lpData.dossiers.values()].flatMap(d => d.trips);
+        const totalKosten = lpRows.reduce((s, r) => s + (Number.isFinite(r.kosten) ? r.kosten : 0), 0);
+        const validLaden  = lpRows.filter(r => Number.isFinite(r.urenLaden));
+        const validLossen = lpRows.filter(r => Number.isFinite(r.urenLossen));
+        const validRijt   = lpRows.filter(r => Number.isFinite(r.rijtijd) && r.rijtijd >= 0);
+        const avg = (arr, key) => arr.length ? arr.reduce((s, r) => s + r[key], 0) / arr.length : 0;
+        const stdDev = (arr, key) => {
+          if (arr.length < 2) return 0;
+          const mean = avg(arr, key);
+          const variance = arr.reduce((s, r) => s + Math.pow(r[key] - mean, 2), 0) / arr.length;
+          return Math.sqrt(variance);
+        };
+        const numDossiers = lpData.dossiers.size;
+        const safeUid = lpKey.replace(/[^a-z0-9]/gi, "_");
+
+        html += `<div class="week-lp-section">
+          <div class="week-lp-title">📦 ${escapeHtml(lpData.label)}</div>
+          <div class="week-lp-inner">
+            <div class="week-kpi-grid">
+              <div class="card"><div class="label">Totale kosten</div><div class="value week-kpi-value">${formatEuro(totalKosten)}</div></div>
+              <div class="card"><div class="label">Gem. laadtijd / rit</div><div class="value week-kpi-value">${formatHours(avg(validLaden, "urenLaden"))} u</div><div class="kpi-sd">σ ${formatHours(stdDev(validLaden, "urenLaden"))} u</div></div>
+              <div class="card"><div class="label">Gem. lostijd / rit</div><div class="value week-kpi-value">${formatHours(avg(validLossen, "urenLossen"))} u</div><div class="kpi-sd">σ ${formatHours(stdDev(validLossen, "urenLossen"))} u</div></div>
+              <div class="card"><div class="label">Gem. rijtijd / rit</div><div class="value week-kpi-value">${formatHours(avg(validRijt, "rijtijd"))} u</div><div class="kpi-sd">σ ${formatHours(stdDev(validRijt, "rijtijd"))} u</div></div>
+              <div class="card"><div class="label">Gem. kosten / woning</div><div class="value week-kpi-value">${formatEuro(numDossiers ? totalKosten / numDossiers : 0)}</div></div>
+            </div>
+            <div style="overflow:auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:28px"></th>
+                    <th>Dossier</th>
+                    <th>Kosten</th>
+                    <th>Ritten</th>
+                    <th>Laadtijd</th>
+                    <th>Lostijd</th>
+                    <th>Rijtijd</th>
+                  </tr>
+                </thead>
+                <tbody>`;
+
+        [...lpData.dossiers.entries()]
+          .sort((a, b) => String(a[1].label).localeCompare(String(b[1].label), "nl-NL", { numeric: true }))
+          .forEach(([dossierKey, dossierData], idx) => {
+            const { label: dossierLabel, trips } = dossierData;
+            const uid = `${safeUid}_${idx}`;
+            const totLaden  = trips.reduce((s, r) => s + (Number.isFinite(r.urenLaden)  ? r.urenLaden  : 0), 0);
+            const totLossen = trips.reduce((s, r) => s + (Number.isFinite(r.urenLossen) ? r.urenLossen : 0), 0);
+            const totRijt   = trips.reduce((s, r) => s + (Number.isFinite(r.rijtijd)    ? r.rijtijd    : 0), 0);
+            const totKosten = trips.reduce((s, r) => s + (Number.isFinite(r.kosten)     ? r.kosten     : 0), 0);
+
+            html += `<tr class="week-dossier-row" onclick="toggleWeekTrips('${uid}')">
+                <td style="text-align:center" id="wchev-${uid}">▶</td>
+                <td>${escapeHtml(dossierLabel)}</td>
+                <td>${formatEuro(totKosten)}</td>
+                <td>${trips.length}</td>
+                <td>${formatHours(totLaden)}</td>
+                <td>${formatHours(totLossen)}</td>
+                <td>${formatHours(totRijt)}</td>
+              </tr>
+              <tr id="wtrips-${uid}" class="hidden">
+                <td colspan="7" style="padding:0">
+                  <table style="background:#f8fafc;border-top:none">
+                    <thead>
+                      <tr>
+                        <th style="background:#f1f5f9;padding-left:40px;text-align:left">Rit</th>
+                        <th style="background:#f1f5f9;text-align:left">Laadplaats</th>
+                        <th style="background:#f1f5f9;text-align:left">Type</th>
+                        <th style="background:#f1f5f9">Eenheidsprijs</th>
+                        <th style="background:#f1f5f9">Laadtijd</th>
+                        <th style="background:#f1f5f9">Lostijd</th>
+                        <th style="background:#f1f5f9">Rijtijd</th>
+                        <th style="background:#f1f5f9">Kosten</th>
+                      </tr>
+                    </thead>
+                    <tbody>`;
+
+            trips
+              .sort((a, b) => String(a.zending).localeCompare(String(b.zending), "nl-NL", { numeric: true }))
+              .forEach(trip => {
+                html += `<tr style="background:#f8fafc">
+                  <td style="padding-left:40px;text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.zending)}</td>
+                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.laadLocatie || "—")}</td>
+                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.voertuigType || "—")}</td>
+                  <td style="font-size:11px;color:#475569">${Number.isFinite(trip.eenheidsprijs) ? formatEuro(trip.eenheidsprijs) : "—"}</td>
+                  <td style="font-size:11px;color:#475569">${formatHours(trip.urenLaden)}</td>
+                  <td style="font-size:11px;color:#475569">${formatHours(trip.urenLossen)}</td>
+                  <td style="font-size:11px;color:#475569">${formatHours(trip.rijtijd)}</td>
+                  <td style="font-size:11px;color:#475569">${Number.isFinite(trip.kosten) ? formatEuro(trip.kosten) : "—"}</td>
+                </tr>`;
+              });
+
+            html += `</tbody></table></td></tr>`;
+          });
+
+        html += `</tbody></table></div></div></div>`;
+      });
+
+      weekContent.innerHTML = html;
+    }
+
+    function toggleWeekTrips(uid) {
+      const row = document.getElementById("wtrips-" + uid);
+      const chev = document.getElementById("wchev-" + uid);
+      if (!row) return;
+      const nowHidden = row.classList.toggle("hidden");
+      if (chev) chev.textContent = nowHidden ? "▶" : "▼";
+    }
+
+    // ─── Dossier analyse ────────────────────────────────────────────────────
+    function renderDossierAnalysis() {
+      if (!state.selectedDossier) {
+        summaryPanelEl.classList.add("hidden");
+        tablePanelEl.classList.add("hidden");
+        regressionPanelEl.classList.add("hidden");
+        destroyCharts();
+        return;
+      }
+
+      const dossierRows = state.records.filter(r => r.dossierKey === state.selectedDossier);
+      if (!dossierRows.length) {
+        summaryPanelEl.classList.add("hidden");
+        tablePanelEl.classList.add("hidden");
+        regressionPanelEl.classList.add("hidden");
+        destroyCharts();
+        return;
+      }
+
+      const dossierMeta = state.dossiers.find(d => d.dossierKey === state.selectedDossier);
+      const dossierLabel = dossierMeta?.dossierLabel || state.selectedDossier;
+      const dossierTotals = emptyMetrics();
+      dossierRows.forEach(row => addToMetrics(dossierTotals, row));
+
+      const uniqueRitten = new Set(dossierRows.map(r => r.zending)).size;
+      const dossierUnitPrice = getUnitPrice(dossierTotals);
+      const laadPlaatsen = formatPlaceList(dossierRows.map(row => row.laadLocatie));
+      const losPlaatsen = formatPlaceList(dossierRows.map(row => row.losLocatie));
+      summaryCardsEl.innerHTML = `
+        <div class="card"><div class="label">Dossier</div><div class="value">${escapeHtml(dossierLabel)}</div></div>
+        <div class="card"><div class="label">Datum</div><div class="value">${escapeHtml(dossierMeta?.primaryDateLabel || "Onbekend")}</div></div>
+        <div class="card"><div class="label">Project</div><div class="value">${escapeHtml(dossierMeta?.primaryProject || UNKNOWN_PROJECT_LABEL)}</div></div>
+        <div class="card"><div class="label">Laadplaats(en)</div><div class="value value-places">${escapeHtml(laadPlaatsen)}</div></div>
+        <div class="card"><div class="label">Losplaats(en)</div><div class="value value-places">${escapeHtml(losPlaatsen)}</div></div>
+        <div class="card"><div class="label">Ritten</div><div class="value">${uniqueRitten}</div></div>
+        <div class="card"><div class="label">Uren laden</div><div class="value">${formatHours(dossierTotals.laden)}</div></div>
+        <div class="card"><div class="label">Uren lossen</div><div class="value">${formatHours(dossierTotals.lossen)}</div></div>
+        <div class="card"><div class="label">Rijtijd</div><div class="value">${formatHours(dossierTotals.rijtijd)}</div></div>
+        <div class="card"><div class="label">Totaal tariefaantal</div><div class="value">${formatHours(dossierTotals.tarief)}</div></div>
+        <div class="card"><div class="label">Totale kosten</div><div class="value">${formatEuro(dossierTotals.kosten)}</div></div>
+        <div class="card"><div class="label">Gem. eenheidsprijs</div><div class="value">${Number.isFinite(dossierUnitPrice) ? formatEuro(dossierUnitPrice) : "—"}</div></div>
+      `;
+
+      // Individuele ritten gesorteerd op ritnummer
+      const rowsHtml = [];
+      [...dossierRows]
+        .sort((a, b) => String(a.zending).localeCompare(String(b.zending), "nl-NL", { numeric: true, sensitivity: "base" }))
+        .forEach(row => {
+          rowsHtml.push(`
+            <tr>
+              <td>${escapeHtml(row.zending)}</td>
+              <td>${escapeHtml(row.losLocatie || "—")}</td>
+              <td>${escapeHtml(row.laadLocatie || "—")}</td>
+              <td>${escapeHtml(row.voertuigType || "—")}</td>
+              <td>${formatHours(row.urenLaden)}</td>
+              <td>${formatHours(row.urenLossen)}</td>
+              <td>${formatHours(row.tariefaantal)}</td>
+              <td>${formatHours(row.rijtijd)}</td>
+              <td>${Number.isFinite(row.eenheidsprijs) ? formatEuro(row.eenheidsprijs) : "—"}</td>
+              <td>${Number.isFinite(row.kosten) ? formatEuro(row.kosten) : "—"}</td>
+            </tr>
+          `);
+        });
+
+      resultBodyEl.innerHTML = rowsHtml.join("");
+      summaryPanelEl.classList.remove("hidden");
+      tablePanelEl.classList.remove("hidden");
+      if (state.chartsNeedRebuild) {
+        renderRegressionCharts();
+        state.chartsNeedRebuild = false;
+      }
+    }
+
+    async function handleFileUpload(file) {
+      if (!file) {
+        fbExcelEl.classList.remove("has-file");
+        excelFileNameEl.textContent = "";
+        fileStatusEl.textContent = "geen bestand";
+        workspaceEl.classList.add("hidden");
+        regressionPanelEl.classList.add("hidden");
+        destroyCharts();
+        return;
+      }
+
+      fbExcelEl.classList.add("has-file");
+      excelFileNameEl.textContent = file.name;
+      fileStatusEl.textContent = "geladen";
+
+      setStatus("Bestand wordt gelezen...", "warn");
+      workspaceEl.classList.add("hidden");
+      summaryPanelEl.classList.add("hidden");
+      tablePanelEl.classList.add("hidden");
+      regressionPanelEl.classList.add("hidden");
+      destroyCharts();
+      state.records = [];
+      state.dossiers = [];
+      state.selectedDossier = "";
+      state.filters = { dateFrom: "", dateTo: "", project: "ALL", dossierSearch: "" };
+      dossierSearchEl.value = "";
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        if (!workbook.SheetNames.length) {
+          fileStatusEl.textContent = "fout";
+          setStatus("Geen tabbladen gevonden in dit bestand.", "error");
+          return;
+        }
+
+        const sheetName = findOrdersSheetName(workbook.SheetNames);
+        state.selectedSheetName = sheetName;
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (!rows.length) {
+          fileStatusEl.textContent = "fout";
+          setStatus(`Tabblad "${sheetName}" is leeg.`, "error");
+          return;
+        }
+
+        state.rows = rows;
+        state.headerRowIndex = detectHeaderRow(rows);
+        state.headers = buildHeaders(rows[state.headerRowIndex]);
+        const mapping = detectMapping(state.headers);
+        const result = parseRowsWithMapping(mapping);
+        state.records = result.records;
+        state.warnings = result.warnings;
+        state.dossiers = buildDossierMeta(state.records);
+
+        if (!state.records.length || !state.dossiers.length) {
+          fileStatusEl.textContent = "fout";
+          const warningText = state.warnings.length ? ` ${state.warnings.join(" ")}` : "";
+          setStatus(`Geen bruikbare rijen gevonden.${warningText}`, "error");
+          return;
+        }
+
+        refreshFilterOptions();
+        refreshWeekSelect();
+        renderDossierList();
+        workspaceEl.classList.remove("hidden");
+
+        const warningText = state.warnings.length ? ` Waarschuwing: ${state.warnings.join(" ")}` : "";
+        fileStatusEl.textContent = `geladen (${sheetName})`;
+        setStatus(`${state.records.length} rijen geanalyseerd uit "${sheetName}".${warningText}`, state.warnings.length ? "warn" : "ok");
+      } catch (error) {
+        console.error(error);
+        fileStatusEl.textContent = "fout";
+        setStatus(`Fout bij inlezen van Excel: ${error.message}`, "error");
+      }
+    }
+
+    excelFileEl.addEventListener("change", e => handleFileUpload(e.target.files[0]));
+
+    // Sluit week-dropdown als buiten geklikt
+    document.addEventListener("click", e => {
+      const wrap = document.getElementById("weekDropdownWrap");
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById("weekDropdownPanel")?.classList.remove("open");
+        document.getElementById("weekDropdownBtn")?.classList.remove("open");
+      }
+    });
+
+    dateFromEl.addEventListener("change", () => {
+      state.filters.dateFrom = dateFromEl.value || "";
+      state.chartsNeedRebuild = true;
+      renderDossierList();
+    });
+
+    dateToEl.addEventListener("change", () => {
+      state.filters.dateTo = dateToEl.value || "";
+      state.chartsNeedRebuild = true;
+      renderDossierList();
+    });
+
+    projectFilterEl.addEventListener("change", () => {
+      state.filters.project = projectFilterEl.value;
+      state.chartsNeedRebuild = true;
+      renderDossierList();
+    });
+
+    dossierSearchEl.addEventListener("input", () => {
+      state.filters.dossierSearch = dossierSearchEl.value;
+      renderDossierList();
+    });
+
+    dossierListEl.addEventListener("click", event => {
+      const button = event.target.closest("button[data-dossier]");
+      if (!button) return;
+      state.selectedDossier = button.dataset.dossier;
+      dossierListEl.querySelectorAll("button[data-dossier]").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.dossier === state.selectedDossier);
+      });
+      renderDossierAnalysis();
+    });
+  </script>
+</body>
+</html>
