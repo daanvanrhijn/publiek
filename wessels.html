@@ -430,6 +430,8 @@
     .week-lp-inner { padding: 12px; }
     .week-dossier-row { cursor: pointer; }
     .week-dossier-row:hover td { background: #f0fdf4; }
+    .week-aligned-table { table-layout: fixed; }
+    .week-aligned-table th, .week-aligned-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     @media (max-width: 1200px) {
       .workspace-columns {
@@ -572,6 +574,7 @@
                   <thead>
                     <tr>
                       <th>Rit</th>
+                      <th>Losdatum</th>
                       <th>Losplaats</th>
                       <th>Laadplaats</th>
                       <th>Type</th>
@@ -1690,16 +1693,31 @@
               <div class="card"><div class="label">Gem. kosten / woning</div><div class="value week-kpi-value">${formatEuro(numDossiers ? totalKosten / numDossiers : 0)}</div></div>
             </div>
             <div style="overflow:auto">
-              <table>
+              <table class="week-aligned-table">
+                <colgroup>
+                  <col style="width:32px">
+                  <col style="width:14%">
+                  <col style="width:11%">
+                  <col style="width:17%">
+                  <col style="width:11%">
+                  <col style="width:9%">
+                  <col style="width:8%">
+                  <col style="width:8%">
+                  <col style="width:8%">
+                  <col style="width:11%">
+                </colgroup>
                 <thead>
                   <tr>
-                    <th style="width:28px"></th>
+                    <th></th>
                     <th>Dossier</th>
-                    <th>Kosten</th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
                     <th>Ritten</th>
-                    <th>Laadtijd</th>
-                    <th>Lostijd</th>
-                    <th>Rijtijd</th>
+                    <th>Gem. laadtijd</th>
+                    <th>Gem. lostijd</th>
+                    <th>Gem. rijtijd</th>
+                    <th>Kosten</th>
                   </tr>
                 </thead>
                 <tbody>`;
@@ -1713,22 +1731,45 @@
             const totLossen = trips.reduce((s, r) => s + (Number.isFinite(r.urenLossen) ? r.urenLossen : 0), 0);
             const totRijt   = trips.reduce((s, r) => s + (Number.isFinite(r.rijtijd)    ? r.rijtijd    : 0), 0);
             const totKosten = trips.reduce((s, r) => s + (Number.isFinite(r.kosten)     ? r.kosten     : 0), 0);
+            const nLaden  = trips.filter(r => Number.isFinite(r.urenLaden)).length;
+            const nLossen = trips.filter(r => Number.isFinite(r.urenLossen)).length;
+            const nRijt   = trips.filter(r => Number.isFinite(r.rijtijd) && r.rijtijd >= 0).length;
+            const gemLaden  = nLaden  ? totLaden  / nLaden  : 0;
+            const gemLossen = nLossen ? totLossen / nLossen : 0;
+            const gemRijt   = nRijt   ? totRijt   / nRijt   : 0;
 
             html += `<tr class="week-dossier-row" onclick="toggleWeekTrips('${uid}')">
                 <td style="text-align:center" id="wchev-${uid}">▶</td>
                 <td>${escapeHtml(dossierLabel)}</td>
-                <td>${formatEuro(totKosten)}</td>
+                <td></td>
+                <td></td>
+                <td></td>
                 <td>${trips.length}</td>
-                <td>${formatHours(totLaden)}</td>
-                <td>${formatHours(totLossen)}</td>
-                <td>${formatHours(totRijt)}</td>
+                <td>${formatHours(gemLaden)}</td>
+                <td>${formatHours(gemLossen)}</td>
+                <td>${formatHours(gemRijt)}</td>
+                <td>${formatEuro(totKosten)}</td>
               </tr>
               <tr id="wtrips-${uid}" class="hidden">
-                <td colspan="7" style="padding:0">
-                  <table style="background:#f8fafc;border-top:none">
+                <td colspan="10" style="padding:0">
+                  <table class="week-aligned-table" style="background:#f8fafc;border-top:none">
+                    <colgroup>
+                      <col style="width:32px">
+                      <col style="width:14%">
+                      <col style="width:11%">
+                      <col style="width:17%">
+                      <col style="width:11%">
+                      <col style="width:9%">
+                      <col style="width:8%">
+                      <col style="width:8%">
+                      <col style="width:8%">
+                      <col style="width:11%">
+                    </colgroup>
                     <thead>
                       <tr>
-                        <th style="background:#f1f5f9;padding-left:40px;text-align:left">Rit</th>
+                        <th style="background:#f1f5f9"></th>
+                        <th style="background:#f1f5f9;text-align:left">Rit</th>
+                        <th style="background:#f1f5f9;text-align:left">Losdatum</th>
                         <th style="background:#f1f5f9;text-align:left">Laadplaats</th>
                         <th style="background:#f1f5f9;text-align:left">Type</th>
                         <th style="background:#f1f5f9">Eenheidsprijs</th>
@@ -1744,14 +1785,16 @@
               .sort((a, b) => String(a.zending).localeCompare(String(b.zending), "nl-NL", { numeric: true }))
               .forEach(trip => {
                 html += `<tr style="background:#f8fafc">
-                  <td style="padding-left:40px;text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.zending)}</td>
-                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.laadLocatie || "—")}</td>
-                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.voertuigType || "—")}</td>
-                  <td style="font-size:11px;color:#475569">${Number.isFinite(trip.eenheidsprijs) ? formatEuro(trip.eenheidsprijs) : "—"}</td>
+                  <td style="background:#f8fafc"></td>
+                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.zending)}</td>
+                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.datumLabel || "")}</td>
+                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.laadLocatie || "")}</td>
+                  <td style="text-align:left;font-size:11px;color:#475569">${escapeHtml(trip.voertuigType || "")}</td>
+                  <td style="font-size:11px;color:#475569">${Number.isFinite(trip.eenheidsprijs) ? formatEuro(trip.eenheidsprijs) : ""}</td>
                   <td style="font-size:11px;color:#475569">${formatHours(trip.urenLaden)}</td>
                   <td style="font-size:11px;color:#475569">${formatHours(trip.urenLossen)}</td>
                   <td style="font-size:11px;color:#475569">${formatHours(trip.rijtijd)}</td>
-                  <td style="font-size:11px;color:#475569">${Number.isFinite(trip.kosten) ? formatEuro(trip.kosten) : "—"}</td>
+                  <td style="font-size:11px;color:#475569">${Number.isFinite(trip.kosten) ? formatEuro(trip.kosten) : ""}</td>
                 </tr>`;
               });
 
@@ -1823,6 +1866,7 @@
           rowsHtml.push(`
             <tr>
               <td>${escapeHtml(row.zending)}</td>
+              <td>${escapeHtml(row.datumLabel || "—")}</td>
               <td>${escapeHtml(row.losLocatie || "—")}</td>
               <td>${escapeHtml(row.laadLocatie || "—")}</td>
               <td>${escapeHtml(row.voertuigType || "—")}</td>
