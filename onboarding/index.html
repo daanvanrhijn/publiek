@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Onboarding</title>
+  <script>
+    if (window.location.pathname.endsWith("/onboarding")) {
+      window.location.replace(window.location.pathname + "/" + window.location.search + window.location.hash);
+    }
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
