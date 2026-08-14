@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onboarding</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="lang-switcher">
+      <label class="visually-hidden" for="lang-select" data-i18n="langLabel">Taal</label>
+      <select id="lang-select" aria-label="Taal">
+        <option value="nl">Nederlands</option>
+        <option value="en">English</option>
+        <option value="pl">Polski</option>
+        <option value="bg">Български</option>
+        <option value="ro">Română</option>
+        <option value="uk">Українська</option>
+      </select>
+    </div>
+    <h1 data-i18n="headerTitle">Introductievideo's voor medewerkers</h1>
+    <p data-i18n="headerSubtitle">Bekijk de video's hieronder om op de hoogte te zijn. Klik op een video om deze af te spelen.</p>
+  </header>
+
+  <section id="name-gate" class="name-gate" aria-labelledby="name-prompt">
+    <form id="name-form" class="name-gate-box">
+      <h2 id="name-prompt" data-i18n="namePrompt">Wat is je naam?</h2>
+      <input id="name-input" type="text" autocomplete="name" required data-i18n-placeholder="namePlaceholder" placeholder="Voer je volledige naam in">
+      <button type="submit" data-i18n="startButton">Start</button>
+    </form>
+  </section>
+
+  <section id="user-bar" class="user-bar" hidden>
+    <span><span data-i18n="welcomeBack">Welkom,</span> <strong id="user-name-display"></strong></span>
+    <span><span data-i18n="progressLabel">Voortgang</span>: <strong id="progress-count">0</strong>/3</span>
+    <button id="change-name-btn" class="link-button" type="button" data-i18n="changeName">Niet jij? Wijzig naam</button>
+  </section>
+
+  <main id="video-grid" class="video-grid" hidden>
+    <article class="video-card">
+      <h2>
+        <span data-i18n="video1Title">Welkom &amp; Veiligheidsoverzicht</span>
+        <span id="badge-player-video1" class="watched-badge" hidden data-i18n="watchedLabel">Bekeken</span>
+      </h2>
+      <p data-i18n="video1Desc">Een korte introductie over de faciliteit en de basisveiligheidsregels.</p>
+      <div class="video-wrapper">
+        <iframe id="player-video1" src="https://www.youtube.com/embed/M7lc1UVf-VE" title="Welkom & Veiligheidsoverzicht" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+    </article>
+
+    <article class="video-card">
+      <h2>
+        <span data-i18n="video2Title">Basis van de apparatuur</span>
+        <span id="badge-player-video2" class="watched-badge" hidden data-i18n="watchedLabel">Bekeken</span>
+      </h2>
+      <p data-i18n="video2Desc">Hoe je de belangrijkste apparatuur op de werkvloer bedient.</p>
+      <div class="video-wrapper">
+        <iframe id="player-video2" src="https://www.youtube.com/embed/M7lc1UVf-VE" title="Basis van de apparatuur" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+    </article>
+
+    <article class="video-card">
+      <h2>
+        <span data-i18n="video3Title">Dagelijkse procedures</span>
+        <span id="badge-player-video3" class="watched-badge" hidden data-i18n="watchedLabel">Bekeken</span>
+      </h2>
+      <p data-i18n="video3Desc">Overzicht van de dagelijkse taken en checklists.</p>
+      <div class="video-wrapper">
+        <iframe id="player-video3" src="https://www.youtube.com/embed/M7lc1UVf-VE" title="Dagelijkse procedures" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+    </article>
+  </main>
+
+  <footer>
+    <p data-i18n="footerText">Vragen? Neem contact op met je ploegleider.</p>
+  </footer>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="translations.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
