@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S&amp;O Planmodule</title>
+<link rel="stylesheet" href="so_plan.css">
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="logo-area">
+      <h1>Service &amp; Onderhoud — Planmodule</h1>
+      <span>BAM Wood Concepts</span>
+    </div>
+    <div class="upload-zone">
+      <label class="upload-btn" onclick="document.getElementById('file-input-so').click(); return false;">
+        📋 S&amp;O Meldingen <span class="ext-tag">.json</span>
+      </label>
+      <input type="file" id="file-input-so" accept=".json" class="hidden-input">
+      <span id="file-name-so" class="file-name">Niet geladen</span>
+      <label class="upload-btn" onclick="document.getElementById('file-input-ol').click(); return false;">
+        🛠 Oplospunten <span class="ext-tag">.json</span>
+      </label>
+      <input type="file" id="file-input-ol" accept=".json" class="hidden-input">
+      <span id="file-name-ol" class="file-name">Niet geladen</span>
+      <span class="header-sep"></span>
+      <button class="upload-btn" onclick="exportPlanData()">⬇ Plandata</button>
+      <label class="upload-btn" onclick="document.getElementById('file-input-plan').click(); return false;">⬆ Plandata</label>
+      <input type="file" id="file-input-plan" accept=".json" class="hidden-input">
+    </div>
+  </div>
+</header>
+
+<div class="stats-outer">
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-label">Werkvoorraad</div><div class="stat-value total" id="stat-total">—</div></div>
+    <div class="stat-card"><div class="stat-label">Nieuw / ongepland</div><div class="stat-value open" id="stat-nieuw">—</div></div>
+    <div class="stat-card"><div class="stat-label">Gepland / in uitvoering</div><div class="stat-value" id="stat-lopend" style="color:#2563eb">—</div></div>
+    <div class="stat-card"><div class="stat-label">Meldingen te laat</div><div class="stat-value" id="stat-telaat" style="color:#dc2626">—</div></div>
+    <div class="stat-card"><div class="stat-label">Gereed (te sluiten)</div><div class="stat-value closed" id="stat-gereed">—</div></div>
+  </div>
+</div>
+
+<nav class="tabs-outer">
+  <div class="tabs">
+    <button class="tab active" data-tab="werkvoorraad" onclick="switchTab('werkvoorraad')">Werkvoorraad</button>
+    <button class="tab" data-tab="planbord" onclick="switchTab('planbord')">Planbord</button>
+    <button class="tab" data-tab="backlog" onclick="switchTab('backlog')">Backlog <span class="tab-badge grijs" id="tab-backlog-badge" style="display:none">0</span></button>
+    <button class="tab" data-tab="telaat" onclick="switchTab('telaat')">Te laat <span class="tab-badge" id="tab-telaat-badge" style="display:none">0</span></button>
+    <button class="tab" data-tab="agenda" onclick="switchTab('agenda')">Agenda</button>
+    <button class="tab" data-tab="rapportage" onclick="switchTab('rapportage')">Rapportage</button>
+    <button class="tab" data-tab="team" onclick="switchTab('team')">Team &amp; instellingen</button>
+  </div>
+</nav>
+
+<div class="filters-outer">
+  <div class="filters">
+    <div class="ms-wrap" id="ms-bron">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-bron')"><span class="ms-trigger-label">Bron</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-actions"><button class="ms-action-btn" onclick="selectAll('ms-bron')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-bron')">Geen</button></div>
+        <div class="ms-list" id="ms-bron-list"></div>
+      </div>
+    </div>
+    <div class="ms-wrap" id="ms-bedrijf">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-bedrijf')"><span class="ms-trigger-label">Bedrijf</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-search"><input type="text" placeholder="Zoeken…" oninput="filterItems('ms-bedrijf', this.value)"></div>
+        <div class="ms-actions"><button class="ms-action-btn" onclick="selectAll('ms-bedrijf')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-bedrijf')">Geen</button></div>
+        <div class="ms-list" id="ms-bedrijf-list"></div>
+      </div>
+    </div>
+    <div class="ms-wrap" id="ms-project">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-project')"><span class="ms-trigger-label">Projecten</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-search"><input type="text" placeholder="Zoeken…" oninput="filterItems('ms-project', this.value)"></div>
+        <div class="ms-actions"><button class="ms-action-btn" onclick="selectAll('ms-project')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-project')">Geen</button></div>
+        <div class="ms-list" id="ms-project-list"></div>
+      </div>
+    </div>
+    <div class="ms-wrap" id="ms-nummer">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-nummer')"><span class="ms-trigger-label">Nummer</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-search"><input type="text" placeholder="Zoeken (bhome- of interne code)…" oninput="filterItems('ms-nummer', this.value)"></div>
+        <div class="ms-actions"><button class="ms-action-btn" onclick="selectAll('ms-nummer')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-nummer')">Geen</button></div>
+        <div class="ms-list" id="ms-nummer-list"></div>
+      </div>
+    </div>
+    <div class="ms-wrap" id="ms-status">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-status')"><span class="ms-trigger-label">Werkstatus</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-actions" style="border-top:none"><button class="ms-action-btn" onclick="selectAll('ms-status')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-status')">Geen</button></div>
+        <div class="ms-list" id="ms-status-list"></div>
+      </div>
+    </div>
+    <div class="ms-wrap" id="ms-behandelaar">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-behandelaar')"><span class="ms-trigger-label">Behandelaar</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-actions" style="border-top:none"><button class="ms-action-btn" onclick="selectAll('ms-behandelaar')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-behandelaar')">Geen</button></div>
+        <div class="ms-list" id="ms-behandelaar-list"></div>
+      </div>
+    </div>
+    <div class="ms-wrap" id="ms-prio">
+      <div class="ms-trigger" onclick="toggleDropdown('ms-prio')"><span class="ms-trigger-label">Prioriteit</span><span class="ms-count" style="display:none">0</span><span class="ms-arrow">▼</span></div>
+      <div class="ms-dropdown">
+        <div class="ms-actions" style="border-top:none"><button class="ms-action-btn" onclick="selectAll('ms-prio')">Alles</button><button class="ms-action-btn" onclick="deselectAll('ms-prio')">Geen</button></div>
+        <div class="ms-list" id="ms-prio-list"></div>
+      </div>
+    </div>
+    <input type="text" class="search-box" id="search-box" placeholder="🔍 Zoek in omschrijving, nummer, project…" oninput="renderAll()">
+    <label class="check-inline"><input type="checkbox" id="chk-brongesloten" onchange="renderAll()"> Toon in bron gesloten</label>
+    <button class="reset-btn" onclick="resetFilters()">↺ Reset</button>
+  </div>
+</div>
+
+<div class="dashboard">
+  <!-- ── Tab: Werkvoorraad ─────────────────────────────────────────────── -->
+  <section class="tab-panel active" id="tab-werkvoorraad">
+    <div class="card wide">
+      <div class="card-header">
+        <div><div class="card-title">Werkvoorraad</div><div class="card-subtitle">Taken bovenaan (uitklapbaar). Daaronder de ongebonden meldingen &amp; oplospunten per project — koppel je een item aan een taak, dan verhuist het naar die taak</div></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn-primary" onclick="nieuweTaak()">+ Nieuwe taak</button>
+          <button class="mini-btn" onclick="setAlleProjectenOpen(true)">⊞ Alles uitklappen</button>
+          <button class="mini-btn" onclick="setAlleProjectenOpen(false)">⊟ Alles inklappen</button>
+          <strong id="wv-count" class="header-count"></strong>
+        </div>
+      </div>
+      <div class="bulk-bar" id="wv-bulkbar" hidden></div>
+      <div class="card-body" style="padding:0">
+        <div class="table-scroll tall" id="wv-container"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tab: Planbord ─────────────────────────────────────────────────── -->
+  <section class="tab-panel" id="tab-planbord">
+    <div class="board-toolbar">
+      <label class="board-filter"><span>Wie pakt het op</span>
+        <select id="pb-behandelaar" onchange="setPlanbordBehandelaar(this.value)"></select>
+      </label>
+      <label class="check-inline"><input type="checkbox" id="chk-group-pb" onchange="toggleGroup('planbord', this.checked)"> Groepeer per project</label>
+      <span class="board-hint">Alleen taken mét gekoppelde meldingen of oplospunten staan op het planbord</span>
+    </div>
+    <div id="planbord-container"></div>
+  </section>
+
+  <!-- ── Tab: Backlog (afgerond werk) ──────────────────────────────────── -->
+  <section class="tab-panel" id="tab-backlog">
+    <div class="card wide">
+      <div class="card-header">
+        <div><div class="card-title">Backlog — afgerond werk</div><div class="card-subtitle">Alle taken (en losse meldingen) op Gereed of Gesloten. Klap een taak uit voor de gekoppelde meldingen; alles blijft bewerkbaar — zet de status terug en hij staat weer op het planbord</div></div>
+        <strong id="backlog-count" class="header-count"></strong>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-scroll tall" id="backlog-container"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tab: Te laat ──────────────────────────────────────────────────── -->
+  <section class="tab-panel" id="tab-telaat">
+    <div class="telaat-toolbar">
+      <button class="btn-primary" onclick="openWeekstart()">🖨 Weekstartbord (A3)</button>
+      <span class="board-hint">Print- en besprekingsvel voor de weekstart met het team</span>
+    </div>
+    <div class="card wide">
+      <div class="card-header">
+        <div><div class="card-title">Taken te lang in hun planbordfase</div><div class="card-subtitle" id="fase-subtitle">Ingesteld bij Team &amp; instellingen → Doorlooptijd &amp; deadlines</div></div>
+        <strong id="fase-count" class="header-count"></strong>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-scroll" id="fase-container"></div>
+      </div>
+    </div>
+    <div class="card wide">
+      <div class="card-header">
+        <div><div class="card-title">Over de streefdatum</div><div class="card-subtitle" id="telaat-subtitle">Items die niet binnen de ingestelde doorlooptijd zijn afgehandeld</div></div>
+        <strong id="telaat-count" class="header-count"></strong>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="table-scroll tall" id="telaat-container"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tab: Agenda ───────────────────────────────────────────────────── -->
+  <section class="tab-panel" id="tab-agenda">
+    <div class="agenda-grid" id="agenda-grid"></div>
+  </section>
+
+  <!-- ── Tab: Rapportage ───────────────────────────────────────────────── -->
+  <section class="tab-panel" id="tab-rapportage">
+    <div class="report-grid" id="report-grid"></div>
+  </section>
+
+  <!-- ── Tab: Team & instellingen ──────────────────────────────────────── -->
+  <section class="tab-panel" id="tab-team">
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Doorlooptijd &amp; deadlines</div><div class="card-subtitle">Bepaalt de streefdatum en wanneer een item als "te laat" telt</div></div></div>
+      <div class="card-body">
+        <div class="settings-row">
+          <div class="plan-field">
+            <label>Oplospunt — dagen na aanmaak</label>
+            <input type="number" min="1" id="set-deadline-ol" onchange="setSetting('deadlineOl', this.value)">
+          </div>
+          <div class="plan-field">
+            <label>Servicemelding — dagen na aanmaak</label>
+            <input type="number" min="1" id="set-deadline-so" onchange="setSetting('deadlineSo', this.value)">
+          </div>
+        </div>
+        <p class="settings-text" style="margin-top:10px">
+          Voorbeeld: staat het oplospunt op 30 dagen, dan is de streefdatum de aanmaakdatum + 30 dagen.
+          Zodra die datum verstreken is en het item nog niet op Gereed/Gesloten staat, verschijnt het in de tab
+          <strong>Te laat</strong> en telt het mee in de statistiek.
+        </p>
+        <div class="settings-fase">
+          <div class="settings-fase-kop">Maximale tijd per planbordfase
+            <span>Hoe lang mag een taak in die kolom van het planbord staan? 0 = geen limiet. Staat een taak er langer in, dan verschijnt hij bovenaan in de tab <strong>Te laat</strong> en op het weekstartbord.</span>
+          </div>
+          <div class="settings-fase-grid" id="fase-max-grid"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Team</div><div class="card-subtitle">Behandelaars die je kunt toewijzen aan meldingen en acties</div></div></div>
+      <div class="card-body">
+        <div class="team-add">
+          <input type="text" id="team-name-input" placeholder="Naam behandelaar…" onkeydown="if(event.key==='Enter')addTeamMember()">
+          <button class="btn-primary" onclick="addTeamMember()">+ Toevoegen</button>
+        </div>
+        <div id="team-list" class="team-list"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><div class="card-title">Data &amp; opslag</div><div class="card-subtitle">Plandata staat los van de brondata en wordt lokaal in de browser bewaard</div></div></div>
+      <div class="card-body">
+        <p class="settings-text">
+          <strong>Werkwijze:</strong> laad bij het openen altijd de twee bron-JSON's (S&amp;O meldingen + oplospunten).
+          Alles wat je in deze module vastlegt — werkstatus, behandelaar, acties, notities — wordt automatisch
+          in de browser opgeslagen (localStorage) en gekoppeld op een stabiel ID. Bij het laden van een verse
+          export blijven je planregistraties dus behouden; items die in de bron inmiddels gesloten zijn, krijgen
+          de markering <span class="badge badge-brongesloten">in bron gesloten</span>.
+        </p>
+        <p class="settings-text">
+          Gebruik <strong>⬇ Plandata</strong> in de header voor een export van alle planregistraties (back-up of
+          delen met een collega) en <strong>⬆ Plandata</strong> om zo'n export weer in te laden. Dit JSON-formaat
+          is één-op-één het datamodel voor de toekomstige backend.
+        </p>
+        <div class="settings-actions">
+          <button class="btn-danger" onclick="clearPlanData()">🗑 Alle plandata wissen</button>
+          <span id="storage-info" class="settings-text"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ── Dialoog: werkelijke uren bij het afronden van een taak ──────────── -->
+<div class="modal-overlay" id="uren-overlay" onclick="sluitUrenDialoog()"></div>
+<div class="modal" id="uren-modal" hidden>
+  <div class="modal-body" id="uren-modal-body"></div>
+</div>
+
+<!-- ── Weekstartbord (A3, print) ───────────────────────────────────────── -->
+<div class="ws-overlay" id="ws-overlay" onclick="sluitWeekstart()"></div>
+<div class="ws-sheet" id="weekstart-sheet" hidden>
+  <div class="ws-acties ws-noprint">
+    <button class="btn-primary" onclick="window.print()">🖨 Printen (A3, liggend)</button>
+    <span class="ws-tip">Kies in het printvenster papierformaat <strong>A3</strong> en richting <strong>liggend</strong>. Achtergrondkleuren aanzetten geeft het beste resultaat.</span>
+    <button class="mini-btn" onclick="sluitWeekstart()">✕ Sluiten</button>
+  </div>
+  <div class="ws-vel" id="ws-vel"></div>
+</div>
+
+<!-- ── Detail drawer ───────────────────────────────────────────────────── -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawer-title"></div>
+      <div class="drawer-sub" id="drawer-sub"></div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<script src="so_plan.js"></script>
+</body>
+</html>
