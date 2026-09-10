@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python make_testcases.py ifc/004-01-Wws-04c1.ifc 004-01-Wws-04c.jpeg 004-01-Wws-04c1)",
+      "Bash(PY=python bash run_tests.sh ifc/004-01-Wws-04c1.ifc 004-01-Wws-04c.jpeg)",
+      "Bash(python -c \"import calibreer, ast; print\\('calibreer ok'\\)\")"
+    ]
+  }
+}
