@@ -148,6 +148,51 @@
     .status.warn { color: #b45309; }
     .status.error { color: #b91c1c; }
 
+    .cost-options {
+      background: #fff;
+      border: 1px solid #d7dee8;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+    }
+    .co-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #006633;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: #334155;
+      cursor: pointer;
+      user-select: none;
+      padding: 3px 10px 3px 4px;
+      border: 1px solid #e2e8f0;
+      border-radius: 99px;
+      background: #f8fafc;
+    }
+    .switch:hover { border-color: #86efac; background: #f0fdf4; }
+    .switch input { accent-color: #00843D; width: 14px; height: 14px; cursor: pointer; }
+    .switch .sw-off { color: #b45309; font-weight: 600; }
+    .co-note { font-size: 11px; color: #64748b; }
+    .co-details { font-size: 11px; margin-left: auto; }
+    .co-details summary { cursor: pointer; color: #006633; font-weight: 600; }
+    .co-details table {
+      margin-top: 6px;
+      border: 1px solid #e2e8f0;
+      min-width: 320px;
+    }
+    .co-details th, .co-details td { padding: 3px 8px; font-size: 11px; }
+
     .workspace {
       display: flex;
       flex-direction: column;
@@ -476,6 +521,23 @@
     </div>
     <div id="status" class="status"></div>
 
+    <div id="costOptions" class="cost-options hidden">
+      <div class="co-title"><span>💶</span>Kostenopbouw</div>
+      <label class="switch">
+        <input type="checkbox" id="toggleDiesel" checked>
+        <span id="dieselLabel">Dieseltoeslag meerekenen</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="toggleTrailer" checked>
+        <span id="trailerLabel">Trailerhuur meerekenen</span>
+      </label>
+      <div class="co-note" id="costOptionsNote"></div>
+      <details class="co-details">
+        <summary>Verdeling trailerhuur per maand</summary>
+        <div id="trailerBreakdown"></div>
+      </details>
+    </div>
+
     <div id="workspace" class="workspace hidden">
 
       <div id="weekPanel" class="panel">
@@ -583,6 +645,8 @@
                       <th>Tariefaantal</th>
                       <th>Rijtijd</th>
                       <th>Eenheidsprijs</th>
+                      <th>Dieseltoeslag</th>
+                      <th>Trailerhuur</th>
                       <th>Kosten</th>
                     </tr>
                   </thead>
@@ -648,10 +712,22 @@
       losLocatie:   30,  // Kolom AE – losplaats / projectnaam
       tariefaantal: 44,  // Kolom AS – tariefaantal uren
       eenheidsprijs: 47, // Kolom AV – eenheidsprijs
-      kosten:        51, // Kolom AZ – kosten
+      bedragExcl:    49, // Kolom AX – bedrag excl. dieseltoeslag
+      extraKosten:   50, // Kolom AY – extra kosten bedrag
+      kosten:        51, // Kolom AZ – totaalbedrag incl. dieseltoeslag
+      dieselPct:     88, // Kolom CK – brandstoftoeslag percentage
+      dieselBedrag:  89, // Kolom CL – brandstoftoeslag bedrag
+      projectNaam:   90, // Kolom CM – project
       urenLaden:    95,  // Kolom CR – uren laden
       urenLossen:   96   // Kolom CS – uren lossen
     };
+
+    // Trailerhuur: 7 diepladers × €1.700 p/mnd, verdeeld over de woningen van die maand.
+    const TRAILER_MONTH_COST = 11900;
+    // Dossierreferenties met deze woorden zijn geen woninglevering en tellen niet mee.
+    const NON_WONING_TOKENS = ["intern transport", "trailer", "dieplader", "bok", "rekje", "badkamer"];
+    // Eigen vestigingen: als project hierop staat is dat een hub-rit, niet het eindproject.
+    const INTERNAL_SITE_KEYS = new Set(["rijssen", "oudkarspel", "heerhugowaard", "algemeen"]);
     const state = {
       rows: [],
       headers: [],
@@ -668,7 +744,9 @@
         dossierSearch: ""
       },
       charts: [],
-      chartsNeedRebuild: true
+      chartsNeedRebuild: true,
+      costMode: { diesel: true, trailer: true },
+      trailerMonths: new Map()
     };
 
     const statusEl = document.getElementById("status");
@@ -689,6 +767,13 @@
     const resultBodyEl = document.getElementById("resultBody");
     const regressionPanelEl = document.getElementById("regressionPanel");
     const regressionGridEl = document.getElementById("regressionGrid");
+    const costOptionsEl = document.getElementById("costOptions");
+    const costOptionsNoteEl = document.getElementById("costOptionsNote");
+    const trailerBreakdownEl = document.getElementById("trailerBreakdown");
+    const toggleDieselEl = document.getElementById("toggleDiesel");
+    const toggleTrailerEl = document.getElementById("toggleTrailer");
+    const dieselLabelEl = document.getElementById("dieselLabel");
+    const trailerLabelEl = document.getElementById("trailerLabel");
 
     function normalizeText(value) {
       return String(value ?? "")
@@ -992,6 +1077,9 @@
         rijtijd: 0,
         tarief: 0,
         kosten: 0,
+        diesel: 0,
+        trailer: 0,
+        dieselBasis: 0,
         unitWeightValue: 0,
         unitWeightQty: 0
       };
@@ -1004,6 +1092,9 @@
       if (Number.isFinite(row.rijtijd)) bucket.rijtijd += row.rijtijd;
       if (Number.isFinite(row.tariefaantal)) bucket.tarief += row.tariefaantal;
       if (Number.isFinite(row.kosten)) bucket.kosten += row.kosten;
+      if (Number.isFinite(row.dieselBedrag)) bucket.diesel += row.dieselBedrag;
+      if (Number.isFinite(row.trailerKosten)) bucket.trailer += row.trailerKosten;
+      if (Number.isFinite(row.bedragExcl)) bucket.dieselBasis += row.bedragExcl;
 
       if (Number.isFinite(row.eenheidsprijs) && Number.isFinite(row.tariefaantal) && row.tariefaantal !== 0) {
         bucket.unitWeightValue += row.eenheidsprijs * row.tariefaantal;
@@ -1068,10 +1159,29 @@
         const laadLosSum    = (Number.isFinite(urenLaden) ? urenLaden : 0) + (Number.isFinite(urenLossen) ? urenLossen : 0);
         const rijtijd       = Number.isFinite(tariefaantal) ? tariefaantal - laadLosSum : NaN;
         const eenheidsprijs = parseNumber(row[FIXED_COLUMNS.eenheidsprijs]);
-        let kosten          = parseNumber(row[FIXED_COLUMNS.kosten]);
-        if (!Number.isFinite(kosten) && Number.isFinite(eenheidsprijs) && Number.isFinite(tariefaantal)) {
-          kosten = eenheidsprijs * tariefaantal;
+        let kostenIncl      = parseNumber(row[FIXED_COLUMNS.kosten]);
+        if (!Number.isFinite(kostenIncl) && Number.isFinite(eenheidsprijs) && Number.isFinite(tariefaantal)) {
+          kostenIncl = eenheidsprijs * tariefaantal;
         }
+
+        // Dieseltoeslag: kolom CL indien gevuld, anders afgeleid als AZ − AX − AY (data vóór 2026).
+        const bedragExcl  = parseNumber(row[FIXED_COLUMNS.bedragExcl]);
+        const extraKosten = parseNumber(row[FIXED_COLUMNS.extraKosten]);
+        const dieselKolom = parseNumber(row[FIXED_COLUMNS.dieselBedrag]);
+        let dieselBedrag = 0;
+        if (Number.isFinite(dieselKolom) && dieselKolom !== 0) {
+          dieselBedrag = dieselKolom;
+        } else if (Number.isFinite(kostenIncl) && Number.isFinite(bedragExcl)) {
+          dieselBedrag = Math.max(0, kostenIncl - bedragExcl - (Number.isFinite(extraKosten) ? extraKosten : 0));
+        }
+        let dieselPct = parseNumber(row[FIXED_COLUMNS.dieselPct]);
+        if (!Number.isFinite(dieselPct) && Number.isFinite(bedragExcl) && bedragExcl > 0) {
+          dieselPct = (dieselBedrag / bedragExcl) * 100;
+        }
+        const kostenExcl = Number.isFinite(kostenIncl) ? kostenIncl - dieselBedrag : NaN;
+
+        const projectNaam = String(row[FIXED_COLUMNS.projectNaam] ?? "").trim();
+        const woningRef = deriveWoningRef(dossierRef, projectNaam);
 
         // Samengestelde groeperingssleutel: dossierRef (kol D) + losLocatie
         // Zo worden twee projecten met dezelfde referentie apart gehouden.
@@ -1099,11 +1209,161 @@
           tariefaantal,
           rijtijd,
           eenheidsprijs,
-          kosten
+          projectNaam,
+          woningRef,
+          woningKey: "",
+          woningMaand: "",
+          bedragExcl,
+          extraKosten,
+          dieselPct,
+          dieselBedrag,
+          trailerKosten: 0,
+          kostenIncl,
+          kostenExcl,
+          kosten: kostenIncl
         });
       }
 
       return { records, warnings };
+    }
+
+    // ─── Trailerhuur ────────────────────────────────────────────────────────
+    // Vrachtnummer-suffix (VR1, VR.2, …) weglaten: meerdere vrachten horen bij één woning.
+    function deriveWoningRef(dossierRef, projectNaam) {
+      const raw = String(dossierRef ?? "").trim();
+      if (!raw) return "";
+      const low = raw.toLowerCase();
+      if (low.startsWith("afvoer")) return "";
+      if (NON_WONING_TOKENS.some(token => low.includes(token))) return "";
+      if (normalizeText(projectNaam) === "algemeen") return "";
+      return normalizeText(raw.replace(/\s*vr\s*\.?\s*\d+\s*$/i, ""));
+    }
+
+    // Verdeelt €11.900 per maand over de woningen die in die maand voor het eerst zijn beleverd,
+    // en binnen een woning gelijkmatig over de zendingen.
+    function assignTrailerCosts(records) {
+      records.forEach(row => {
+        row.trailerKosten = 0;
+        row.woningKey = "";
+        row.woningMaand = "";
+      });
+
+      const eligible = records.filter(row => row.woningRef && /^\d{4}-\d{2}-\d{2}$/.test(row.datumKey));
+
+      // Hub-ritten (project = eigen vestiging) krijgen het project van de dichtstbijzijnde echte projectrit.
+      const byRef = new Map();
+      eligible.forEach(row => {
+        if (!byRef.has(row.woningRef)) byRef.set(row.woningRef, []);
+        byRef.get(row.woningRef).push(row);
+      });
+      byRef.forEach(list => {
+        const external = list.filter(row => !INTERNAL_SITE_KEYS.has(normalizeText(row.projectNaam)));
+        list.forEach(row => {
+          let projectKey = normalizeText(row.projectNaam);
+          if (INTERNAL_SITE_KEYS.has(projectKey) && external.length) {
+            let best = external[0];
+            let bestDiff = Infinity;
+            external.forEach(candidate => {
+              const diff = Math.abs(Date.parse(candidate.datumKey) - Date.parse(row.datumKey));
+              if (diff < bestDiff) { bestDiff = diff; best = candidate; }
+            });
+            projectKey = normalizeText(best.projectNaam);
+          }
+          row.woningKey = `${row.woningRef}|||${projectKey}`;
+        });
+      });
+
+      const woningen = new Map();
+      eligible.forEach(row => {
+        if (!woningen.has(row.woningKey)) woningen.set(row.woningKey, []);
+        woningen.get(row.woningKey).push(row);
+      });
+
+      const byMonth = new Map();
+      woningen.forEach(rows => {
+        const firstDate = rows.reduce((min, row) => (row.datumKey < min ? row.datumKey : min), rows[0].datumKey);
+        const maand = firstDate.slice(0, 7);
+        if (!byMonth.has(maand)) byMonth.set(maand, []);
+        byMonth.get(maand).push(rows);
+      });
+
+      const monthly = new Map();
+      byMonth.forEach((woningList, maand) => {
+        const perWoning = TRAILER_MONTH_COST / woningList.length;
+        monthly.set(maand, { woningen: woningList.length, perWoning });
+        woningList.forEach(rows => {
+          const perZending = perWoning / rows.length;
+          rows.forEach(row => {
+            row.trailerKosten = perZending;
+            row.woningMaand = maand;
+          });
+        });
+      });
+
+      return new Map([...monthly.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+    }
+
+    function applyCostMode() {
+      state.records.forEach(row => {
+        const base = state.costMode.diesel ? row.kostenIncl : row.kostenExcl;
+        let total = Number.isFinite(base) ? base : NaN;
+        if (state.costMode.trailer && row.trailerKosten) {
+          total = (Number.isFinite(total) ? total : 0) + row.trailerKosten;
+        }
+        row.kosten = total;
+      });
+    }
+
+    const MONTH_NAMES = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+
+    function monthLabel(key) {
+      const m = key.match(/^(\d{4})-(\d{2})$/);
+      if (!m) return key;
+      return `${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}`;
+    }
+
+    function costModeSuffix() {
+      const parts = [state.costMode.diesel ? "incl. diesel" : "excl. diesel"];
+      if (state.costMode.trailer) parts.push("incl. trailerhuur");
+      return parts.join(", ");
+    }
+
+    function renderCostOptions() {
+      dieselLabelEl.innerHTML = state.costMode.diesel
+        ? "Dieseltoeslag meerekenen"
+        : 'Dieseltoeslag meerekenen <span class="sw-off">— nu excl.</span>';
+      trailerLabelEl.innerHTML = state.costMode.trailer
+        ? "Trailerhuur meerekenen"
+        : 'Trailerhuur meerekenen <span class="sw-off">— nu uit</span>';
+
+      const totaalWoningen = [...state.trailerMonths.values()].reduce((sum, m) => sum + m.woningen, 0);
+      costOptionsNoteEl.textContent =
+        `Bedragen worden getoond ${costModeSuffix()}. Trailerhuur: ${formatEuro(TRAILER_MONTH_COST)} p/mnd verdeeld over ${totaalWoningen} woningen in ${state.trailerMonths.size} maanden.`;
+
+      if (!state.trailerMonths.size) {
+        trailerBreakdownEl.innerHTML = '<div class="dossier-empty">Geen woningleveringen herkend.</div>';
+        return;
+      }
+      const rows = [...state.trailerMonths.entries()].map(([maand, info]) => `
+        <tr>
+          <td>${escapeHtml(monthLabel(maand))}</td>
+          <td>${info.woningen}</td>
+          <td>${formatEuro(info.perWoning)}</td>
+        </tr>`).join("");
+      trailerBreakdownEl.innerHTML = `
+        <table>
+          <thead><tr><th>Maand</th><th>Woningen</th><th>Trailerhuur p/woning</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function handleCostModeChange() {
+      state.costMode.diesel = toggleDieselEl.checked;
+      state.costMode.trailer = toggleTrailerEl.checked;
+      applyCostMode();
+      renderCostOptions();
+      renderWeekOverview();
+      renderDossierList();
     }
 
     function buildDossierMeta(records) {
@@ -1681,30 +1941,38 @@
         };
         const numDossiers = lpData.dossiers.size;
         const safeUid = lpKey.replace(/[^a-z0-9]/gi, "_");
+        const totalDiesel = lpRows.reduce((s, r) => s + (Number.isFinite(r.dieselBedrag) ? r.dieselBedrag : 0), 0);
+        const totalTrailer = lpRows.reduce((s, r) => s + (Number.isFinite(r.trailerKosten) ? r.trailerKosten : 0), 0);
+        const dieselBasis = lpRows.reduce((s, r) => s + (Number.isFinite(r.bedragExcl) ? r.bedragExcl : 0), 0);
+        const dieselPct = dieselBasis > 0 ? (totalDiesel / dieselBasis) * 100 : NaN;
 
         html += `<div class="week-lp-section">
           <div class="week-lp-title">📦 ${escapeHtml(lpData.label)}</div>
           <div class="week-lp-inner">
             <div class="week-kpi-grid">
-              <div class="card"><div class="label">Totale kosten</div><div class="value week-kpi-value">${formatEuro(totalKosten)}</div></div>
+              <div class="card"><div class="label">Totale kosten</div><div class="value week-kpi-value">${formatEuro(totalKosten)}</div><div class="kpi-sd">${escapeHtml(costModeSuffix())}</div></div>
               <div class="card"><div class="label">Gem. laadtijd / rit</div><div class="value week-kpi-value">${formatHours(avg(validLaden, "urenLaden"))} u</div><div class="kpi-sd">σ ${formatHours(stdDev(validLaden, "urenLaden"))} u</div></div>
               <div class="card"><div class="label">Gem. lostijd / rit</div><div class="value week-kpi-value">${formatHours(avg(validLossen, "urenLossen"))} u</div><div class="kpi-sd">σ ${formatHours(stdDev(validLossen, "urenLossen"))} u</div></div>
               <div class="card"><div class="label">Gem. rijtijd / rit</div><div class="value week-kpi-value">${formatHours(avg(validRijt, "rijtijd"))} u</div><div class="kpi-sd">σ ${formatHours(stdDev(validRijt, "rijtijd"))} u</div></div>
+              <div class="card"><div class="label">Dieseltoeslag</div><div class="value week-kpi-value">${formatEuro(totalDiesel)}</div><div class="kpi-sd">${Number.isFinite(dieselPct) ? `gem. ${dieselPct.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}%` : "—"}</div></div>
+              <div class="card"><div class="label">Trailerhuur</div><div class="value week-kpi-value">${formatEuro(totalTrailer)}</div><div class="kpi-sd">${state.costMode.trailer ? "meegerekend" : "niet meegerekend"}</div></div>
               <div class="card"><div class="label">Gem. kosten / woning</div><div class="value week-kpi-value">${formatEuro(numDossiers ? totalKosten / numDossiers : 0)}</div></div>
             </div>
             <div style="overflow:auto">
               <table class="week-aligned-table">
                 <colgroup>
                   <col style="width:32px">
-                  <col style="width:14%">
-                  <col style="width:11%">
-                  <col style="width:17%">
-                  <col style="width:11%">
-                  <col style="width:9%">
+                  <col style="width:13%">
+                  <col style="width:10%">
+                  <col style="width:15%">
+                  <col style="width:10%">
+                  <col style="width:7%">
+                  <col style="width:7%">
+                  <col style="width:7%">
+                  <col style="width:7%">
                   <col style="width:8%">
                   <col style="width:8%">
                   <col style="width:8%">
-                  <col style="width:11%">
                 </colgroup>
                 <thead>
                   <tr>
@@ -1717,6 +1985,8 @@
                     <th>Gem. laadtijd</th>
                     <th>Gem. lostijd</th>
                     <th>Gem. rijtijd</th>
+                    <th>Dieseltoeslag</th>
+                    <th>Trailerhuur</th>
                     <th>Kosten</th>
                   </tr>
                 </thead>
@@ -1731,6 +2001,8 @@
             const totLossen = trips.reduce((s, r) => s + (Number.isFinite(r.urenLossen) ? r.urenLossen : 0), 0);
             const totRijt   = trips.reduce((s, r) => s + (Number.isFinite(r.rijtijd)    ? r.rijtijd    : 0), 0);
             const totKosten = trips.reduce((s, r) => s + (Number.isFinite(r.kosten)     ? r.kosten     : 0), 0);
+            const totDiesel = trips.reduce((s, r) => s + (Number.isFinite(r.dieselBedrag) ? r.dieselBedrag : 0), 0);
+            const totTrailer = trips.reduce((s, r) => s + (Number.isFinite(r.trailerKosten) ? r.trailerKosten : 0), 0);
             const nLaden  = trips.filter(r => Number.isFinite(r.urenLaden)).length;
             const nLossen = trips.filter(r => Number.isFinite(r.urenLossen)).length;
             const nRijt   = trips.filter(r => Number.isFinite(r.rijtijd) && r.rijtijd >= 0).length;
@@ -1748,22 +2020,26 @@
                 <td>${formatHours(gemLaden)}</td>
                 <td>${formatHours(gemLossen)}</td>
                 <td>${formatHours(gemRijt)}</td>
+                <td>${formatEuro(totDiesel)}</td>
+                <td>${formatEuro(totTrailer)}</td>
                 <td>${formatEuro(totKosten)}</td>
               </tr>
               <tr id="wtrips-${uid}" class="hidden">
-                <td colspan="10" style="padding:0">
+                <td colspan="12" style="padding:0">
                   <table class="week-aligned-table" style="background:#f8fafc;border-top:none">
                     <colgroup>
                       <col style="width:32px">
-                      <col style="width:14%">
-                      <col style="width:11%">
-                      <col style="width:17%">
-                      <col style="width:11%">
-                      <col style="width:9%">
+                      <col style="width:13%">
+                      <col style="width:10%">
+                      <col style="width:15%">
+                      <col style="width:10%">
+                      <col style="width:7%">
+                      <col style="width:7%">
+                      <col style="width:7%">
+                      <col style="width:7%">
                       <col style="width:8%">
                       <col style="width:8%">
                       <col style="width:8%">
-                      <col style="width:11%">
                     </colgroup>
                     <thead>
                       <tr>
@@ -1776,6 +2052,8 @@
                         <th style="background:#f1f5f9">Laadtijd</th>
                         <th style="background:#f1f5f9">Lostijd</th>
                         <th style="background:#f1f5f9">Rijtijd</th>
+                        <th style="background:#f1f5f9">Dieseltoeslag</th>
+                        <th style="background:#f1f5f9">Trailerhuur</th>
                         <th style="background:#f1f5f9">Kosten</th>
                       </tr>
                     </thead>
@@ -1794,6 +2072,8 @@
                   <td style="font-size:11px;color:#475569">${formatHours(trip.urenLaden)}</td>
                   <td style="font-size:11px;color:#475569">${formatHours(trip.urenLossen)}</td>
                   <td style="font-size:11px;color:#475569">${formatHours(trip.rijtijd)}</td>
+                  <td style="font-size:11px;color:#475569">${trip.dieselBedrag ? formatEuro(trip.dieselBedrag) : ""}</td>
+                  <td style="font-size:11px;color:#475569">${trip.trailerKosten ? formatEuro(trip.trailerKosten) : ""}</td>
                   <td style="font-size:11px;color:#475569">${Number.isFinite(trip.kosten) ? formatEuro(trip.kosten) : ""}</td>
                 </tr>`;
               });
@@ -1843,6 +2123,8 @@
       const dossierUnitPrice = getUnitPrice(dossierTotals);
       const laadPlaatsen = formatPlaceList(dossierRows.map(row => row.laadLocatie));
       const losPlaatsen = formatPlaceList(dossierRows.map(row => row.losLocatie));
+      const gemDieselPct = dossierTotals.dieselBasis > 0 ? (dossierTotals.diesel / dossierTotals.dieselBasis) * 100 : NaN;
+      const trailerMaand = dossierRows.find(row => row.woningMaand)?.woningMaand || "";
       summaryCardsEl.innerHTML = `
         <div class="card"><div class="label">Dossier</div><div class="value">${escapeHtml(dossierLabel)}</div></div>
         <div class="card"><div class="label">Datum</div><div class="value">${escapeHtml(dossierMeta?.primaryDateLabel || "Onbekend")}</div></div>
@@ -1854,7 +2136,9 @@
         <div class="card"><div class="label">Uren lossen</div><div class="value">${formatHours(dossierTotals.lossen)}</div></div>
         <div class="card"><div class="label">Rijtijd</div><div class="value">${formatHours(dossierTotals.rijtijd)}</div></div>
         <div class="card"><div class="label">Totaal tariefaantal</div><div class="value">${formatHours(dossierTotals.tarief)}</div></div>
-        <div class="card"><div class="label">Totale kosten</div><div class="value">${formatEuro(dossierTotals.kosten)}</div></div>
+        <div class="card"><div class="label">Dieseltoeslag</div><div class="value">${formatEuro(dossierTotals.diesel)}</div><div class="kpi-sd">${Number.isFinite(gemDieselPct) ? `gem. ${gemDieselPct.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}%` : "—"}</div></div>
+        <div class="card"><div class="label">Trailerhuur</div><div class="value">${formatEuro(dossierTotals.trailer)}</div><div class="kpi-sd">${trailerMaand ? escapeHtml(monthLabel(trailerMaand)) : "niet toegerekend"}</div></div>
+        <div class="card"><div class="label">Totale kosten (${escapeHtml(costModeSuffix())})</div><div class="value">${formatEuro(dossierTotals.kosten)}</div></div>
         <div class="card"><div class="label">Gem. eenheidsprijs</div><div class="value">${Number.isFinite(dossierUnitPrice) ? formatEuro(dossierUnitPrice) : "—"}</div></div>
       `;
 
@@ -1875,6 +2159,8 @@
               <td>${formatHours(row.tariefaantal)}</td>
               <td>${formatHours(row.rijtijd)}</td>
               <td>${Number.isFinite(row.eenheidsprijs) ? formatEuro(row.eenheidsprijs) : "—"}</td>
+              <td>${row.dieselBedrag ? formatEuro(row.dieselBedrag) : "—"}</td>
+              <td>${row.trailerKosten ? formatEuro(row.trailerKosten) : "—"}</td>
               <td>${Number.isFinite(row.kosten) ? formatEuro(row.kosten) : "—"}</td>
             </tr>
           `);
@@ -1895,6 +2181,7 @@
         excelFileNameEl.textContent = "";
         fileStatusEl.textContent = "geen bestand";
         workspaceEl.classList.add("hidden");
+        costOptionsEl.classList.add("hidden");
         regressionPanelEl.classList.add("hidden");
         destroyCharts();
         return;
@@ -1906,12 +2193,14 @@
 
       setStatus("Bestand wordt gelezen...", "warn");
       workspaceEl.classList.add("hidden");
+      costOptionsEl.classList.add("hidden");
       summaryPanelEl.classList.add("hidden");
       tablePanelEl.classList.add("hidden");
       regressionPanelEl.classList.add("hidden");
       destroyCharts();
       state.records = [];
       state.dossiers = [];
+      state.trailerMonths = new Map();
       state.selectedDossier = "";
       state.filters = { dateFrom: "", dateTo: "", project: "ALL", dossierSearch: "" };
       dossierSearchEl.value = "";
@@ -1942,6 +2231,8 @@
         const result = parseRowsWithMapping(mapping);
         state.records = result.records;
         state.warnings = result.warnings;
+        state.trailerMonths = assignTrailerCosts(state.records);
+        applyCostMode();
         state.dossiers = buildDossierMeta(state.records);
 
         if (!state.records.length || !state.dossiers.length) {
@@ -1951,6 +2242,8 @@
           return;
         }
 
+        renderCostOptions();
+        costOptionsEl.classList.remove("hidden");
         refreshFilterOptions();
         refreshWeekSelect();
         renderDossierList();
@@ -1967,6 +2260,8 @@
     }
 
     excelFileEl.addEventListener("change", e => handleFileUpload(e.target.files[0]));
+    toggleDieselEl.addEventListener("change", handleCostModeChange);
+    toggleTrailerEl.addEventListener("change", handleCostModeChange);
 
     // Sluit week-dropdown als buiten geklikt
     document.addEventListener("click", e => {
