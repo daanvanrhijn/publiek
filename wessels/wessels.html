@@ -471,7 +471,20 @@
       background: #e6f4ec;
       border-bottom: 1px solid #bbf7d0;
       padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px 16px;
     }
+    .week-lp-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      font-weight: 500;
+      color: #166534;
+    }
+    .week-lp-stats b { font-weight: 700; }
     .week-lp-inner { padding: 12px; }
     .week-dossier-row { cursor: pointer; }
     .week-dossier-row:hover td { background: #f0fdf4; }
@@ -710,6 +723,7 @@
       voertuigType: 18,  // Kolom S  – type voertuig (trekker/dieplader/combi kraan)
       laadLocatie:  23,  // Kolom X  – laadplaats
       losLocatie:   30,  // Kolom AE – losplaats / projectnaam
+      afstand:      34,  // Kolom AI – afstand in km
       tariefaantal: 44,  // Kolom AS – tariefaantal uren
       eenheidsprijs: 47, // Kolom AV – eenheidsprijs
       bedragExcl:    49, // Kolom AX – bedrag excl. dieseltoeslag
@@ -1156,6 +1170,7 @@
         const urenLaden     = parseNumber(row[FIXED_COLUMNS.urenLaden]);
         const urenLossen    = parseNumber(row[FIXED_COLUMNS.urenLossen]);
         const tariefaantal  = parseNumber(row[FIXED_COLUMNS.tariefaantal]);
+        const afstand       = parseNumber(row[FIXED_COLUMNS.afstand]);
         const laadLosSum    = (Number.isFinite(urenLaden) ? urenLaden : 0) + (Number.isFinite(urenLossen) ? urenLossen : 0);
         const rijtijd       = Number.isFinite(tariefaantal) ? tariefaantal - laadLosSum : NaN;
         const eenheidsprijs = parseNumber(row[FIXED_COLUMNS.eenheidsprijs]);
@@ -1208,6 +1223,7 @@
           urenLossen,
           tariefaantal,
           rijtijd,
+          afstand,
           eenheidsprijs,
           projectNaam,
           woningRef,
@@ -1945,9 +1961,20 @@
         const totalTrailer = lpRows.reduce((s, r) => s + (Number.isFinite(r.trailerKosten) ? r.trailerKosten : 0), 0);
         const dieselBasis = lpRows.reduce((s, r) => s + (Number.isFinite(r.bedragExcl) ? r.bedragExcl : 0), 0);
         const dieselPct = dieselBasis > 0 ? (totalDiesel / dieselBasis) * 100 : NaN;
+        const numWoningen = new Set(lpRows.filter(r => r.woningRef).map(r => r.woningRef)).size;
+        // Afstand 0 betekent geen routeberekening; niet meenemen in het gemiddelde.
+        const validKm = lpRows.filter(r => Number.isFinite(r.afstand) && r.afstand > 0);
+        const gemKm = validKm.length ? avg(validKm, "afstand") : NaN;
 
         html += `<div class="week-lp-section">
-          <div class="week-lp-title">📦 ${escapeHtml(lpData.label)}</div>
+          <div class="week-lp-title">
+            <span>📦 ${escapeHtml(lpData.label)}</span>
+            <span class="week-lp-stats">
+              <span><b>${numWoningen}</b> ${numWoningen === 1 ? "woning" : "woningen"}</span>
+              <span><b>${lpRows.length}</b> ${lpRows.length === 1 ? "rit" : "ritten"}</span>
+              <span>gem. <b>${Number.isFinite(gemKm) ? gemKm.toLocaleString("nl-NL", { maximumFractionDigits: 1 }) : "—"}</b> km</span>
+            </span>
+          </div>
           <div class="week-lp-inner">
             <div class="week-kpi-grid">
               <div class="card"><div class="label">Totale kosten</div><div class="value week-kpi-value">${formatEuro(totalKosten)}</div><div class="kpi-sd">${escapeHtml(costModeSuffix())}</div></div>
